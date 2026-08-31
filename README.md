@@ -1,178 +1,118 @@
-# Qwen Audio Agent
+# qwen-audio-agent — LangGraph Gateway (Python)
 
 [中文](README_ZH.md) | [English](README.md)
 
 [![CI](https://github.com/snowshadow/qwen-audio-agent-python/actions/workflows/ci.yml/badge.svg)](https://github.com/snowshadow/qwen-audio-agent-python/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/qwen-audio-agent)](https://www.npmjs.com/package/qwen-audio-agent)
 [![node](https://img.shields.io/badge/node-%E2%89%A522.22.2-brightgreen)](https://nodejs.org/)
+[![python](https://img.shields.io/badge/python-3.12–3.14-blue)](https://www.python.org/)
 [![license](https://img.shields.io/github/license/snowshadow/qwen-audio-agent-python)](LICENSE)
 
-## Origin and license
+Independent **LangGraph / Python** fork of
+[QwenAudio/qwen-audio-agent](https://github.com/QwenAudio/qwen-audio-agent).
+Apache-2.0, not an official QwenAudio release. See [`NOTICE`](NOTICE).
 
-This repository is an **independent derivative** of
-[QwenAudio/qwen-audio-agent](https://github.com/QwenAudio/qwen-audio-agent),
-released under [Apache License 2.0](LICENSE). It is **not** an official
-QwenAudio release.
+This repository exists to run the **v2 Gateway** with **two LangGraph state
+machines** in Python. Hosts (CLI, WebUI, TUI, Desktop) and **ACP backend
+adapters stay on Node**. It is a voice Gateway product — not a LangGraph
+Platform app and not a reusable graph library.
 
-The original project remains the source for the npm package
-`qwen-audio-agent` and the v1 desktop releases linked below. This tree keeps
-that license, the upstream attribution in [`NOTICE`](NOTICE), and rewrites the
-Gateway runtime in Python / LangGraph. ACP backend adapters stay in Node.
+For the upstream product overview, desktop releases, and community channels,
+see [QwenAudio/qwen-audio-agent](https://github.com/QwenAudio/qwen-audio-agent).
+`npm install -g qwen-audio-agent` still installs the **official** npm package.
 
-Use this repository when you want the Python Gateway. `npm install -g qwen-audio-agent`
-still installs the upstream project.
+## What is different here
 
-## Agent Presence
+| Area | This repo | Upstream |
+| --- | --- | --- |
+| Gateway control flow | Python + **LangGraph** (`FrontendTurnGraph`, `WorkGraph`) | JavaScript Gateway (v1) |
+| Long I/O | Realtime, ACP, models **outside** the graphs | Same product idea, different runtime |
+| Backend agents | Existing **Node ACP adapters** via `BackendPort` | Same adapters |
+| Status | v2 alpha (`2.0.0a0`), active development | Stable v1 line |
 
-Real conversation should not leave you waiting after a single sentence, nor
-should it grind to a halt just because the Agent is looking something up,
-calling a tool, or working on a task.
-
-Conversation should keep flowing, and the Agent should always be present.
-
-That is why we built **qwen-audio-agent**—a realtime voice runtime that keeps
-Agents talking, working, and present. Whether chatting with you, thinking
-through a problem, or working on a task, your Agent remains in the
-conversation. It listens, responds, and when the task is complete, naturally
-tells you:
-
-"It's ready."
-
-## News
-
-- **2026-08-31 · Independent repository**
-  This tree is published separately from the upstream project. Historical v1 tags below remain on [QwenAudio/qwen-audio-agent](https://github.com/QwenAudio/qwen-audio-agent).
-- **2026-08-27 · v2.0.0 (In development)**
-  🚧 Gateway core runs in Python with two LangGraph state machines; ACP backends stay on Node. This is a voice product, not a LangGraph Platform app. v1 frontend extensions (MCP, OpenAPI, knowledge retrieval, web search, session-end memory extraction, local wake word) are not wired on that path.
-- **2026-08-20 · [v1.11.0](https://github.com/QwenAudio/qwen-audio-agent/releases/tag/v1.11.0)**
-  🧩 Adds embeddable Gateway and Realtime Provider extensions; 🛠️ supports installing and managing Agent Skills; 📎 adds multimodal input to the TUI; 🎨 links pet animations to runtime states.
-- **2026-08-13 · [v1.10.0](https://github.com/QwenAudio/qwen-audio-agent/releases/tag/v1.10.0)**
-  🐋 Added experimental DeepSeek Harness backend support with one-click installation.
-- **2026-08-13 · [v1.9.0](https://github.com/QwenAudio/qwen-audio-agent/releases/tag/v1.9.0)**
-  🧩 Desktop task cards show live Agent progress; 🔎 backend Agent selection is clearer and searchable; 🎙️ supports Qwen3.5-Omni Realtime frontend integration.
-- **2026-08-09 · [v1.8.0](https://github.com/QwenAudio/qwen-audio-agent/releases/tag/v1.8.0)**
-  🆕 Adds Qwen Code backend; 🔧 fixes known issues.
-- **2026-08-07 · [v1.7.0](https://github.com/QwenAudio/qwen-audio-agent/releases/tag/v1.7.0)**
-  🎨 The orb opens up custom skins — import your own look, compatible with pet packs from the [Awesome Codex Pet](https://codexpet.top/) community gallery; 🪟 improved Windows backend Agent startup.
-- **2026-08-06 · [v1.6.0](https://github.com/QwenAudio/qwen-audio-agent/releases/tag/v1.6.0)**
-  🪟 Desktop app now officially supports Windows; 🧠 adds invisible memory with automatic extraction after each session.
-- **2026-08-05 · [v1.5.0](https://github.com/QwenAudio/qwen-audio-agent/releases/tag/v1.5.0)**
-  ⏰ Adds scheduled reminders and progress reporting; 🗣️ adds the voice wake word ("你好千问"); 🐧 desktop build support for Linux; the desktop app now uses a data directory isolated from the CLI.
-- **2026-08-04 · [v1.4.0](https://github.com/QwenAudio/qwen-audio-agent/releases/tag/v1.4.0)**
-  🧠 Adds personalized rules and checklist management; desktop app supports auto-sleep and shortcut wake.
-- **2026-08-03 · [v1.3.0](https://github.com/QwenAudio/qwen-audio-agent/releases/tag/v1.3.0)**
-  🎙️ Adds [🤗 speech-to-speech](https://github.com/huggingface/speech-to-speech) frontend integration, supporting fully local VAD, STT, LLM, and TTS.
-- **2026-08-01 · [v1.2.0](https://github.com/QwenAudio/qwen-audio-agent/releases/tag/v1.2.0)**
-  ⚡ Desktop app adds auto-update, faster startup, and improved backend Agent detection.
-- **2026-07-31 · [v1.1.0](https://github.com/QwenAudio/qwen-audio-agent/releases/tag/v1.1.0)**
-  🤝 Adds Kimi Code CLI backend with native ACP integration.
-- **2026-07-30 · [v1.0.0](https://github.com/QwenAudio/qwen-audio-agent/releases/tag/v1.0.0)**
-  🚀 First stable release, introducing a macOS desktop app with a built-in Gateway.
-- **2026-07-28 · [v0.9.0](https://github.com/QwenAudio/qwen-audio-agent/releases/tag/v0.9.0)**
-  🌍 Project officially open-sourced; backend Agents unified under the ACP architecture.
-
-## Conversation Continues, Tasks Too
-
-Conversation doesn't stop for background tasks; when a task completes, the
-result naturally returns to the current conversation:
-
-https://github.com/user-attachments/assets/ab570531-8da9-4af4-93fa-244bb6614c05
-
-### Core Features
-
-- Full-duplex realtime voice interaction, natural interruption, and sustained multi-turn conversation
-- DashScope Qwen Audio and Qwen3.5 Omni Realtime model selection from one shared model catalog
-- One-click selection of your preferred coding Agent, reusing existing tools, MCP, and Skills
-- Frontend conversation and background tasks run in parallel; ask about progress or cancel at any time
-- Create multiple independent tasks executed asynchronously by the backend Agent, with continuous status tracking
-- Task results automatically return to the current conversation, supporting follow-up questions and modifications
-- WebUI, terminal TUI, and desktop floating orb (macOS / Windows / Linux)
-- Desktop auto-sleep disconnects cloud Realtime without stopping submitted tasks; wake with a configurable shortcut. Local wake-word detection is not connected on the v2 Python Gateway.
-- Per-user long-term personalization and cross-session memory
+The old JavaScript Gateway runtime is **removed** from this tree. Do not expect
+v1-only extension paths (frontend MCP, OpenAPI, knowledge retrieval, web search,
+session-end memory extraction, local wake word) on the Python Gateway until they
+are ported — configuration keys for them currently have **no effect**.
 
 ## Architecture
 
-![qwen-audio-agent architecture](docs/architecture-overview-en.png)
+![LangGraph Gateway overview](docs/architecture-overview-en.png)
 
-Questions that can be answered directly are answered immediately; when tools
-or sustained processing are needed, the task is delegated to the backend Agent.
-Throughout, the user always faces the same assistant.
+```text
+Desktop / WebUI / TUI
+          │ HTTP, WebSocket, playback receipts
+          ▼
+Python transport + realtime app ◄──► Realtime provider (DashScope, etc.)
+          │ normalized tool call
+          ▼
+FrontendTurnGraph          one realtime turn: validate, policy, inline/control/background
+          │
+          └─ spawn_thinking ──► WorkGraph     one Task: checkpointed lifecycle
+                                      │ BackendPort (Node bridge)
+                                      ▼
+                              ACP backend adapter ──► coding agent
+                                      │ result
+                                      ▼
+                          ResultDeliveryCoordinator → voice / text client
+```
 
-<details open>
-<summary>View detailed architecture</summary>
+**LangGraph owns bounded control flow only.** Audio streaming, model sessions,
+scheduler lanes, and ACP I/O stay in ordinary Python / Node code around the
+graphs.
 
-![qwen-audio-agent reference architecture](docs/qwen-audio-agent-three-layer-architecture-en.png)
+| Graph | Scope | Responsibility |
+| --- | --- | --- |
+| `FrontendTurnGraph` | One voice turn | Tool admission, limits, inline vs background routing |
+| `WorkGraph` | One background Task | Event reduction, checkpoints, public task projection |
 
-For the full design and module breakdown, see the [architecture document](docs/architecture.md).
+**Process boundary** (unchanged host contract):
 
-</details>
+```text
+Node/Electron host → python-gateway-entry.mjs → python -m qwen_audio_agent.cli
+WorkGraph backend  → NodeBackendBridge → python-backend-bridge.mjs → JS ACP adapters
+```
 
-### Runtime implementation (v2 in development)
+Source layout:
 
-v2 is a realtime voice Gateway product. LangGraph owns two bounded state
-machines, not the whole runtime:
+- `src/qwen_audio_agent/graphs/` — LangGraph definitions and facades
+- `src/qwen_audio_agent/transport/` — FastAPI / WebSocket Gateway
+- `server/src/agent/` — ACP adapters (still JavaScript)
 
-- `FrontendTurnGraph` admits and routes tools for one realtime turn.
-- `WorkGraph` checkpoints one Task lifecycle while backend I/O stays outside
-  the graph.
+Full invariants, state ownership, and the not-yet-wired extension list:
+[docs/architecture.md](docs/architecture.md).
 
-Node and Electron hosts launch the Python CLI. Configured coding agents still
-run through the existing JavaScript ACP adapters over `BackendPort`. The
-package is not a LangGraph Platform app and does not publish those graphs as a
-standalone library.
+Gateway contract version: **4.0.0** ([docs/contract.md](docs/contract.md)).
 
-The durable Task repository remains the source of truth for public task state,
-results, and notification leases—a LangGraph checkpoint is only an execution
-snapshot. Packaged Desktop builds carry the locked Python project but not a
-Python interpreter or `uv`; the host must provide one of those. Final results
-wait for a safe duplex window. Voice delivery is acknowledged only after the
-active client reports `playback.started`; text-only delivery is acknowledged
-after the response completes successfully.
+## Requirements
 
-See [architecture](docs/architecture.md#current-v2-implementation) for the
-live catalog and the extensions that are not connected.
+- Node.js **22.22.2+** or **24.15.0+**, npm **10+**
+- Python **3.12–3.14** and [uv](https://docs.astral.sh/uv/)
+- DashScope API key when using the default cloud Realtime frontend
 
-## Agent Support
+## Install
 
-| Backend Agent | Integration | Setup | Rating |
-| --- | --- | --- | --- |
-| None | N/A | Frontend-only mode, no config needed | ★★★★★ |
-| Qwen Code | Native ACP | One-click install, user config required | ★★★★★ |
-| OpenCode | Native ACP | One-click install + Bailian config | ★★★★★ |
-| OpenClaw | Built-in ACP bridge | One-click install + Bailian config | ★★★★★ |
-| Qoder | Native ACP | One-click install, user config required | ★★★★★ |
-| Kimi Code | Native ACP | One-click install, user config required | ★★★★★ |
-| Hermes | Native ACP | One-click install, user config required | ★★★★☆ |
-| CodeBuddy | Native ACP | One-click install, user config required | ★★★★☆ |
-| Codex | External ACP adapter | One-click install (base + adapter), user config required | ★★★★☆ |
-| Claude Code | External ACP adapter | One-click install (base + adapter), user config required | ★★★★☆ |
-| DeepSeek | Native ACP | One-click install, DeepSeek API key required | ★★★★☆ |
-| Pi | External ACP adapter | One-click install (base + adapter), user config required | ★★★★☆ |
-
-Ratings reflect current integration completeness, compatibility, and
-verification level: five stars indicate a thoroughly tested recommended
-integration; four stars indicate active development or not yet fully verified.
-For detailed configuration and capability boundaries, see the [configuration guide](docs/configuration.md).
-
-## Installation
-
-Requires Node.js 22.22.2+ or 24.15.0+, npm 10+, Python 3.12–3.14, and
-[uv](https://docs.astral.sh/uv/). The first Gateway launch prepares the locked
-Python runtime with `uv run --frozen --no-dev`.
-
-Install **this** independent repository from GitHub:
+From this repository (LangGraph Gateway):
 
 ```bash
 npm install -g git+https://github.com/snowshadow/qwen-audio-agent-python.git
 ```
 
-`npm install -g qwen-audio-agent` still installs the upstream project. For
-building from source and obtaining a DashScope API Key, see the
-[installation guide](docs/getting-started/install.md).
+From source:
 
-## Quick Start
+```bash
+git clone https://github.com/snowshadow/qwen-audio-agent-python.git
+cd qwen-audio-agent-python
+uv sync --frozen
+npm install
+npm run install:global
+```
 
-1. Create your config and fill in the API Key:
+Details: [docs/getting-started/install.md](docs/getting-started/install.md).
+
+## Quick start
+
+1. Create config and set your Realtime API key:
 
 ```bash
 qwenaudio config
@@ -180,155 +120,40 @@ qwenaudio config
 
 ```dotenv
 DASHSCOPE_API_KEY=your-key
-# Voice frontend model: Omni Flash/Plus or Audio Flash/Plus (Audio Plus is default)
 QWEN_AUDIO_REALTIME_MODEL=qwen-audio-3.0-realtime-plus
-# Backend Agent: optional, leave empty or set to none for frontend-only mode
+# Optional backend; omit for frontend-only mode
 AGENT_PROTOCOL=openclaw
-# Backend model: can be empty; if empty, uses the Agent's own user config
-QWEN_AUDIO_AGENT_BACKEND_MODEL=qwen3.7-max
 ```
 
-> Uses DashScope realtime voice frontend by default; alternatively, switch to a local [speech-to-speech frontend](docs/voice-frontends/speech-to-speech.md), no cloud API Key needed.
-> `qwen3.5-omni-flash-realtime` and `qwen3.5-omni-plus-realtime`
-> accept text, audio, and image at the model level. This release transports text and
-> audio only; image/frame and native-video transport remain disabled until their client and
-> Gateway paths are implemented.
-
-The Desktop app or `qwenaudio config set --realtime-model <id>` configures the single
-Gateway-wide model. Restart the Gateway after a CLI change; WebUI and TUI do not
-override the configured model.
-
-2. Start the Gateway, then open another terminal to start the TUI (or use `qwenaudio webui` for the browser UI):
+2. Start Gateway and a client:
 
 ```bash
-qwenaudio        # Terminal 1: Gateway
-qwenaudio tui    # Terminal 2: TUI
+qwenaudio          # terminal 1
+qwenaudio tui      # terminal 2 — or: qwenaudio webui
 ```
 
-For full configuration options, speech-to-speech frontend setup, and TUI
-platform notes, see [quick start](docs/getting-started/quickstart.md),
-[voice frontends](docs/voice-frontends/speech-to-speech.md), and
-[TUI notes](docs/getting-started/tui.md).
+After changing Gateway settings from the CLI, restart the Gateway process.
 
-## Examples
-
-This repository includes a smart cockpit voice Agent example with vehicle
-control, navigation, music, weather, web search, flash-buy workflows, and a
-car UI:
-
-```bash
-cp examples/car/.env.example examples/car/.env.local
-npm install --prefix examples/car/server
-npm install --prefix examples/car/react-app
-npm run example:car:server   # Terminal 1: car Agent server
-npm run example:car:web      # Terminal 2: car UI
-```
-
-See [examples/car](https://github.com/snowshadow/qwen-audio-agent-python/tree/main/examples/car) for details.
-
-## Desktop App
-
-The desktop app provides a floating voice orb that stays on your desktop,
-with a built-in Gateway, automatic idle sleep, a configurable wake shortcut,
-and a local voice wake word. Sleep disconnects the Realtime frontend while
-keeping the app, Gateway, backend Agent, and submitted tasks alive; it is not
-the same as quitting or restarting the desktop app. Completed results remain
-pending while asleep and return after the app wakes or reconnects.
-Download the installer for your platform from the releases page, or build
-from source:
-
-```bash
-npm run desktop:build:local      # macOS
-npm run desktop:build:win        # Windows
-npm run desktop:build:linux      # Linux (AppImage + deb, no signing)
-```
-
-For visuals, orb behavior, and build instructions, see the [desktop documentation](docs/desktop/overview.md).
-
-## Backend Agent
-
-`AGENT_PROTOCOL` is optional. Leave empty for frontend-only mode; when set,
-it reuses the installed Agent's user-level models, tools, MCP, Skills, and
-authentication. The CLI and desktop app share one onboarding contract: reuse
-an existing Agent when available, install only missing components when the
-user requests one-click installation, and keep installation, configuration,
-and runtime readiness as separate states. Configuration stays backend-owned;
-the desktop app opens the Agent's native setup entry instead of copying or
-rewriting its credentials.
-
-```bash
-qwenaudio setup   # View available backend Agents
-```
-
-For Agent selection, persistent background service, generic ACP entry, and
-permission modes, see the [backend Agent documentation](docs/backends/overview.md).
-
-## Personalization and Memory
-
-By default, the CLI keeps shared assistant data and runtime state under
-`~/.config/qwaudio/`. Desktop uses `QWAUDIO_DATA_DIR` for the shared identity,
-profile, memory, configuration, and notes, while `QWAUDIO_CONFIG_DIR` owns its
-Gateway lease, Task ledger, conversations, checkpoints, skins, and logs. Both
-remain local and are never committed. See the
-[configuration guide](docs/configuration.md) and
-[assistant profile, user preferences, and memory](docs/reference/memory.md).
-
-## Important Notes
-
-- Do not store passwords, API Keys, verification codes, or access tokens in user preferences or conversation.
-- Microphone audio and realtime conversation are sent to the configured Realtime frontend service (DashScope or speech-to-speech).
-- Background tasks may invoke the selected Agent's models, tools, MCP, and external services.
-- `full` permission allows the backend to execute commands and modify files; use only in trusted projects.
-- The Gateway is for local use only; do not expose it directly to the network or public internet.
-- On Linux / Windows with full-duplex without echo cancellation, wear headphones.
-
-For detailed data boundaries, see the [privacy notice](PRIVACY.md); for
-network and permission configuration, see the [configuration guide](docs/configuration.md).
+Configuration reference: [docs/configuration.md](docs/configuration.md).
 
 ## Development
 
-The v2 source tree requires Python 3.12–3.14 and
-[uv](https://docs.astral.sh/uv/) for the Gateway runtime, in addition to the
-Node.js requirements above.
+Gateway changes belong in Python; backend adapter changes in
+`server/src/agent/`.
 
 ```bash
 uv sync --frozen
-uv run pytest
-uv run ruff check src tests
+npm ci
+npm run test:python    # pytest + ruff
+npm test               # Node workspaces + ACP adapters
+npm run dev            # Gateway + WebUI hot reload
 ```
 
-`npm test` covers the Node workspaces only. Run `npm run test:python` (or the
-`uv` commands above) before a Gateway change. CI runs both.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-```bash
-npm install
-npm run build
-npm test
-```
+## Links
 
-```bash
-npm run dev       # Gateway + WebUI hot reload
-npm run desktop   # Desktop floating orb (macOS / Windows)
-```
-
-For more build, test, and release instructions, see [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Community
-
-File issues and discussions in this repository:
-[GitHub Issues](https://github.com/snowshadow/qwen-audio-agent-python/issues).
-
-Upstream community channels, including WeChat groups, belong to
-[QwenAudio/qwen-audio-agent](https://github.com/QwenAudio/qwen-audio-agent).
-
-## Contributing and Security
-
-- Development and contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Security reports: [SECURITY.md](SECURITY.md)
-- Data flow and privacy: [PRIVACY.md](PRIVACY.md)
-- Third-party notices: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
-
-## License
-
-[Apache License 2.0](LICENSE). This independent derivative retains the
-upstream copyright and attribution in [`NOTICE`](NOTICE).
+- Issues: [github.com/snowshadow/qwen-audio-agent-python/issues](https://github.com/snowshadow/qwen-audio-agent-python/issues)
+- Upstream: [github.com/QwenAudio/qwen-audio-agent](https://github.com/QwenAudio/qwen-audio-agent)
+- License: [Apache-2.0](LICENSE) (upstream attribution in [`NOTICE`](NOTICE))
+- Security: [SECURITY.md](SECURITY.md) · Privacy: [PRIVACY.md](PRIVACY.md)
