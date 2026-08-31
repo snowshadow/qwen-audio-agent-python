@@ -4,7 +4,7 @@
 
 前台 Realtime Voice Chatbot、异步 Task Bridge 与单一用户后台 Agent 的目标边界及
 迁移记录见
-[Realtime Voice Chatbot Runtime Roadmap](roadmap/frontend-chatbot-runtime.zh.md)。
+[Realtime Voice Chatbot Runtime Roadmap](https://github.com/snowshadow/qwen-audio-agent-python/blob/main/docs/roadmap/frontend-chatbot-runtime.zh.md)。
 本文与测试共同描述当前运行时行为。本仓库是
 [QwenAudio/qwen-audio-agent](https://github.com/QwenAudio/qwen-audio-agent)
 的独立 Apache-2.0 衍生作品，不是 QwenAudio 组织的官方发行。

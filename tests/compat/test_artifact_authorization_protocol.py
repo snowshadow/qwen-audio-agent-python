@@ -226,9 +226,10 @@ def _js_v4_parse(event: dict[str, object]) -> dict[str, object]:
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node.js is required for the cross-language v4 schema oracle")
-    local_root = Path(__file__).resolve().parents[2]
-    canonical_root = Path("/Users/alfred/Code/qwen-audio-agent")
-    oracle_root = canonical_root if canonical_root.exists() else local_root
+    oracle_root = Path(__file__).resolve().parents[2]
+    node_modules = oracle_root / "node_modules"
+    if not node_modules.is_dir():
+        pytest.skip("npm dependencies are required for the cross-language v4 schema oracle")
     script = """
 import { readFileSync } from 'node:fs'
 import { GatewayServerMessageSchema } from './shared/protocol/gateway-events.mjs'

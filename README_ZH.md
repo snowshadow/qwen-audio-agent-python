@@ -205,7 +205,7 @@ npm run example:car:server   # 终端 1：座舱 Agent 服务
 npm run example:car:web      # 终端 2：座舱 UI
 ```
 
-详细说明见 [examples/car](examples/car)。
+详细说明见 [examples/car](https://github.com/snowshadow/qwen-audio-agent-python/tree/main/examples/car)。
 
 ## 桌面版
 

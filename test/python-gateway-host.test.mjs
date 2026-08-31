@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { resolve } from 'node:path'
+import { normalize, resolve } from 'node:path'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import { DEFAULT_GATEWAY_ENTRY } from '../shared/gateway-process.mjs'
@@ -12,7 +12,9 @@ import {
 
 test('the existing host API points at the thin Python bridge', () => {
   assert.equal(
-    DEFAULT_GATEWAY_ENTRY.endsWith('/server/src/python-gateway-entry.mjs'),
+    normalize(DEFAULT_GATEWAY_ENTRY).endsWith(
+      normalize('server/src/python-gateway-entry.mjs'),
+    ),
     true,
   )
 })
@@ -32,6 +34,7 @@ test('the thin entry loads config.env before enforcing the setup gate', () => {
 test('resolves an explicit Python command without shell parsing', () => {
   const launch = resolvePythonLaunch({
     root: '/runtime',
+    platform: 'linux',
     env: {
       PYTHONPATH: '/shared/python',
       QWEN_AUDIO_AGENT_PYTHON: '/opt/python/bin/python',

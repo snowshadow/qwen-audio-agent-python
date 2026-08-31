@@ -86,6 +86,7 @@ async def test_owner_fifo_allows_other_owners_to_run_concurrently() -> None:
         scheduler=TaskScheduler(max_concurrent=3, max_concurrent_per_owner=1),
     )
     first = await runtime.submit(objective="A", owner_id="owner-a")
+    await eventually(lambda: first["id"] in backend.started)
     second = await runtime.submit(objective="B", owner_id="owner-a")
     other = await runtime.submit(objective="C", owner_id="owner-b")
 

@@ -4,7 +4,7 @@ This document defines the product boundary. Changes that contradict these
 invariants are architecture changes, not local feature work.
 
 See the
-[Realtime Voice Chatbot Runtime Roadmap](roadmap/frontend-chatbot-runtime.md)
+[Realtime Voice Chatbot Runtime Roadmap](https://github.com/snowshadow/qwen-audio-agent-python/blob/main/docs/roadmap/frontend-chatbot-runtime.md)
 for the target boundary and migration history of the Realtime Voice Chatbot,
 asynchronous Task bridge, and single user-configured backend agent. This
 document, together with the tests, describes the current runtime behavior.

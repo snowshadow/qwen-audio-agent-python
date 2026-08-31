@@ -224,7 +224,7 @@ npm run example:car:server   # Terminal 1: car Agent server
 npm run example:car:web      # Terminal 2: car UI
 ```
 
-See [examples/car](examples/car) for details.
+See [examples/car](https://github.com/snowshadow/qwen-audio-agent-python/tree/main/examples/car) for details.
 
 ## Desktop App
 
