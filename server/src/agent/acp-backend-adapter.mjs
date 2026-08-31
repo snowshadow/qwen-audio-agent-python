@@ -1745,7 +1745,6 @@ export class AcpBackendAdapter {
           controller.abort(new Error('Delegation recovery probe timed out'))
           resolvePromise(false)
         }, this.recoveryProbeTimeoutMs)
-        timer.unref?.()
       })
       const validation = Promise.race([
         Promise.resolve().then(() => (
