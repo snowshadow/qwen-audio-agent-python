@@ -24,7 +24,7 @@ dependencies = [
   "langgraph==1.2.11",
   "langgraph-checkpoint-sqlite>=3.1.1,<4",
   "pydantic>=2.12,<3",
-  "python-socks[asyncio]>=2.7,<3",
+  "python-socks[asyncio]>=2.7,<4",
   "uvicorn>=0.38,<1",
   "websockets>=16,<17",
 ]
