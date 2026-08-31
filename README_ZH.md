@@ -2,11 +2,22 @@
 
 [中文](README_ZH.md) | [English](README.md)
 
-[![CI](https://github.com/QwenAudio/qwen-audio-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/QwenAudio/qwen-audio-agent/actions/workflows/ci.yml)
+[![CI](https://github.com/snowshadow/qwen-audio-agent-python/actions/workflows/ci.yml/badge.svg)](https://github.com/snowshadow/qwen-audio-agent-python/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/qwen-audio-agent)](https://www.npmjs.com/package/qwen-audio-agent)
 [![node](https://img.shields.io/badge/node-%E2%89%A522.22.2-brightgreen)](https://nodejs.org/)
-[![license](https://img.shields.io/github/license/QwenAudio/qwen-audio-agent)](LICENSE)
-[![WeChat](https://img.shields.io/badge/WeChat-%E5%8A%A0%E5%85%A5%E8%AE%A8%E8%AE%BA-07C160?logo=wechat&logoColor=white)](#交流与分享)
+[![license](https://img.shields.io/github/license/snowshadow/qwen-audio-agent-python)](LICENSE)
+
+## 来源与许可证
+
+本仓库是 [QwenAudio/qwen-audio-agent](https://github.com/QwenAudio/qwen-audio-agent)
+的**独立衍生作品**，使用 [Apache License 2.0](LICENSE)，**不是** QwenAudio
+组织的官方发行。
+
+原项目仍是 npm 包 `qwen-audio-agent` 以及下方 v1 桌面发版的来源。本仓库保留该许可证、
+[`NOTICE`](NOTICE) 中的上游署名，并将 Gateway 运行时改写为 Python / LangGraph。
+ACP 后台适配器仍在 Node。
+
+需要 Python Gateway 时使用本仓库。`npm install -g qwen-audio-agent` 安装的仍是上游项目。
 
 ## Agent，始终在场
 
@@ -20,6 +31,9 @@
 
 ## News
 
+- **2026-08-31 · 独立仓库**
+  本仓库与上游项目分开发布。下方历史 v1 标签仍在
+  [QwenAudio/qwen-audio-agent](https://github.com/QwenAudio/qwen-audio-agent)。
 - **2026-08-27 · v2.0.0（开发中）**
   🚧 Gateway 核心在 Python 中，由两张 LangGraph 状态机负责有界控制流；ACP 后台仍在 Node。这是语音产品，不是 LangGraph Platform 应用。v1 的前台扩展（MCP、OpenAPI、知识检索、联网搜索、会话结束记忆抽取、本地唤醒词）尚未接到该路径。
 - **2026-08-20 · [v1.11.0](https://github.com/QwenAudio/qwen-audio-agent/releases/tag/v1.11.0)**
@@ -131,13 +145,14 @@ LangGraph checkpoint 只是执行快照。打包后的 Desktop 携带锁定的 P
 [uv](https://docs.astral.sh/uv/)。首次启动 Gateway 时，程序会通过
 `uv run --frozen --no-dev` 准备锁定的 Python 运行环境。
 
-推荐从 npm 安装：
+从 GitHub 安装**本独立仓库**：
 
 ```bash
-npm install -g qwen-audio-agent
+npm install -g git+https://github.com/snowshadow/qwen-audio-agent-python.git
 ```
 
-从源码安装、从 GitHub 安装最新代码以及获取 DashScope API Key 的详细步骤见
+`npm install -g qwen-audio-agent` 安装的仍是上游项目。从源码安装以及获取
+DashScope API Key 的详细步骤见
 [安装指南](docs/getting-started/install.zh.md)。
 
 ## 快速开始
@@ -190,7 +205,7 @@ npm run example:car:server   # 终端 1：座舱 Agent 服务
 npm run example:car:web      # 终端 2：座舱 UI
 ```
 
-详细说明见 [examples/car](https://github.com/QwenAudio/qwen-audio-agent/tree/main/examples/car)。
+详细说明见 [examples/car](examples/car)。
 
 ## 桌面版
 
@@ -273,14 +288,11 @@ npm run desktop   # 桌面悬浮球（macOS / Windows）
 
 ## 交流与分享
 
-你可以直接在 [GitHub Issues](https://github.com/QwenAudio/qwen-audio-agent/issues) 发起讨论。
+问题与讨论请提到本仓库的
+[GitHub Issues](https://github.com/snowshadow/qwen-audio-agent-python/issues)。
 
-对中国用户，也可以扫描左侧二维码加入微信交流群；如果群二维码已满或过期，
-扫描右侧任一维护者的个人二维码，维护者会邀请你进群。
-
-| 微信交流群 | 个人微信 | 个人微信 |
-| :---: | :---: | :---: |
-| <img src="docs/wechat-group-qr.png" width="240" alt="微信交流群二维码"> | <img src="docs/wechat-contact-qr.png" width="240" alt="李旭个人微信二维码"> | <img src="docs/wechat-pigeon-dan-qr.png" width="240" alt="Pigeon.Dan 个人微信二维码"> |
+上游社区渠道（含微信群）属于
+[QwenAudio/qwen-audio-agent](https://github.com/QwenAudio/qwen-audio-agent)。
 
 ## 参与贡献与安全
 
@@ -291,4 +303,5 @@ npm run desktop   # 桌面悬浮球（macOS / Windows）
 
 ## 许可证
 
-[Apache License 2.0](LICENSE)
+[Apache License 2.0](LICENSE)。本独立衍生作品保留上游版权，署名见
+[`NOTICE`](NOTICE)。

@@ -1,5 +1,8 @@
 # Security Policy
 
+本仓库是 [QwenAudio/qwen-audio-agent](https://github.com/QwenAudio/qwen-audio-agent)
+的独立衍生作品。请把**本仓库**的安全问题报到这里，不要报到上游官方仓。
+
 ## 支持范围
 
 安全修复优先提供给最新发布版本。尚未发布的 main 分支问题会在下一个版本中修复。
@@ -9,7 +12,7 @@
 请不要公开提交包含利用细节、用户数据或密钥的 Issue。优先使用 GitHub 仓库的
 **Security → Report a vulnerability** 私密报告功能：
 
-https://github.com/QwenAudio/qwen-audio-agent/security/advisories/new
+https://github.com/snowshadow/qwen-audio-agent-python/security/advisories/new
 
 报告请包含受影响版本、复现条件、潜在影响和可行的缓解方式。维护者确认并准备好
 修复前，请避免公开漏洞细节。

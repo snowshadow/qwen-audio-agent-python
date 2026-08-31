@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- 独立开源至 `snowshadow/qwen-audio-agent-python`：标明本仓库是
+  [QwenAudio/qwen-audio-agent](https://github.com/QwenAudio/qwen-audio-agent)
+  的 Apache-2.0 衍生作品，不是 QwenAudio 官方发行；发布流程不再向 npm 发布
+  上游包名 `qwen-audio-agent`。
 - Gateway 核心改为 Python / LangGraph：`FrontendTurnGraph` 与 `WorkGraph` 负责有界
   状态机，Node 与 Electron 入口改为启动 Python CLI，ACP 后台仍走 `BackendPort` 桥。
 - 前台 MCP、OpenAPI、知识检索、联网搜索、本地唤醒词和会话结束自动记忆整理尚未接入

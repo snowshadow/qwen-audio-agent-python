@@ -6,25 +6,23 @@ Python runtime with `uv run --frozen --no-dev`. When using the default DashScope
 real-time voice frontend, a DashScope API Key is also required.
 The repository provides `.nvmrc` and `.node-version`; when using nvm, you can simply run `nvm use`.
 
-## Install from npm
+This tree is an independent Apache-2.0 derivative of
+[QwenAudio/qwen-audio-agent](https://github.com/QwenAudio/qwen-audio-agent),
+not an official QwenAudio release. The commands below install **this**
+repository. `npm install -g qwen-audio-agent` still installs the upstream
+project.
 
-Install from npm (recommended):
-
-```bash
-npm install -g qwen-audio-agent
-```
-
-You can also install the latest code directly from GitHub:
+## Install from GitHub
 
 ```bash
-npm install -g git+https://github.com/QwenAudio/qwen-audio-agent.git
+npm install -g git+https://github.com/snowshadow/qwen-audio-agent-python.git
 ```
 
 ## Install from Source
 
 ```bash
-git clone https://github.com/QwenAudio/qwen-audio-agent.git
-cd qwen-audio-agent
+git clone https://github.com/snowshadow/qwen-audio-agent-python.git
+cd qwen-audio-agent-python
 uv sync --frozen
 npm install
 npm run install:global
@@ -32,16 +30,10 @@ npm run install:global
 
 ## Upgrade
 
-Upgrade to the latest npm version:
+Upgrade to the latest code from this repository:
 
 ```bash
-npm install -g qwen-audio-agent@latest
-```
-
-Upgrade to the latest GitHub code:
-
-```bash
-npm install -g git+https://github.com/QwenAudio/qwen-audio-agent.git
+npm install -g git+https://github.com/snowshadow/qwen-audio-agent-python.git
 ```
 
 After upgrading, if the Gateway is running as a background service, run `qwenaudio gateway restart` for the new version to take effect.

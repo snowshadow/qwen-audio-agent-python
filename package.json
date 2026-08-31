@@ -7,12 +7,12 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/QwenAudio/qwen-audio-agent.git"
+    "url": "git+https://github.com/snowshadow/qwen-audio-agent-python.git"
   },
   "bugs": {
-    "url": "https://github.com/QwenAudio/qwen-audio-agent/issues"
+    "url": "https://github.com/snowshadow/qwen-audio-agent-python/issues"
   },
-  "homepage": "https://github.com/QwenAudio/qwen-audio-agent#readme",
+  "homepage": "https://github.com/snowshadow/qwen-audio-agent-python#readme",
   "keywords": [
     "qwen",
     "audio",

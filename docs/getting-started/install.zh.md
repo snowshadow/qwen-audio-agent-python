@@ -6,25 +6,21 @@
 实时语音前台时，还需要 DashScope API Key。
 仓库提供 `.nvmrc` 和 `.node-version`；使用 nvm 时可直接运行 `nvm use`。
 
-## 从 npm 安装
+本仓库是 [QwenAudio/qwen-audio-agent](https://github.com/QwenAudio/qwen-audio-agent)
+的独立 Apache-2.0 衍生作品，不是 QwenAudio 组织的官方发行。下面的命令安装的是
+**本仓库**。`npm install -g qwen-audio-agent` 安装的仍是上游项目。
 
-推荐从 npm 安装：
-
-```bash
-npm install -g qwen-audio-agent
-```
-
-也可以直接从 GitHub 安装最新代码：
+## 从 GitHub 安装
 
 ```bash
-npm install -g git+https://github.com/QwenAudio/qwen-audio-agent.git
+npm install -g git+https://github.com/snowshadow/qwen-audio-agent-python.git
 ```
 
 ## 从源码安装
 
 ```bash
-git clone https://github.com/QwenAudio/qwen-audio-agent.git
-cd qwen-audio-agent
+git clone https://github.com/snowshadow/qwen-audio-agent-python.git
+cd qwen-audio-agent-python
 uv sync --frozen
 npm install
 npm run install:global
@@ -32,16 +28,10 @@ npm run install:global
 
 ## 升级
 
-升级到最新 npm 版本：
+升级到本仓库的最新代码：
 
 ```bash
-npm install -g qwen-audio-agent@latest
-```
-
-升级到 GitHub 最新代码：
-
-```bash
-npm install -g git+https://github.com/QwenAudio/qwen-audio-agent.git
+npm install -g git+https://github.com/snowshadow/qwen-audio-agent-python.git
 ```
 
 升级后如果以后台服务方式运行 Gateway，需执行 `qwenaudio gateway restart` 让新版本生效。

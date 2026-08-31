@@ -33,9 +33,10 @@ dependencies = [
 qwenaudio-python-gateway = "qwen_audio_agent.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/QwenAudio/qwen-audio-agent"
-Repository = "https://github.com/QwenAudio/qwen-audio-agent"
-Issues = "https://github.com/QwenAudio/qwen-audio-agent/issues"
+Homepage = "https://github.com/snowshadow/qwen-audio-agent-python"
+Repository = "https://github.com/snowshadow/qwen-audio-agent-python"
+Issues = "https://github.com/snowshadow/qwen-audio-agent-python/issues"
+Upstream = "https://github.com/QwenAudio/qwen-audio-agent"
 
 [dependency-groups]
 dev = [

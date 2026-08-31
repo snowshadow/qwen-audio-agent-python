@@ -54,7 +54,7 @@ for (const workspace of [
 }
 
 const manifest = JSON.parse(readFileSync('package.json', 'utf8'))
-const publicRepository = 'git+https://github.com/QwenAudio/qwen-audio-agent.git'
+const publicRepository = 'git+https://github.com/snowshadow/qwen-audio-agent-python.git'
 const publicRegistry = 'https://registry.npmjs.org/'
 if (manifest.repository?.url !== publicRepository) {
   throw new Error('package.json does not point to the public GitHub repository')

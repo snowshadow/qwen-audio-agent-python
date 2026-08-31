@@ -2,11 +2,25 @@
 
 [中文](README_ZH.md) | [English](README.md)
 
-[![CI](https://github.com/QwenAudio/qwen-audio-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/QwenAudio/qwen-audio-agent/actions/workflows/ci.yml)
+[![CI](https://github.com/snowshadow/qwen-audio-agent-python/actions/workflows/ci.yml/badge.svg)](https://github.com/snowshadow/qwen-audio-agent-python/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/qwen-audio-agent)](https://www.npmjs.com/package/qwen-audio-agent)
 [![node](https://img.shields.io/badge/node-%E2%89%A522.22.2-brightgreen)](https://nodejs.org/)
-[![license](https://img.shields.io/github/license/QwenAudio/qwen-audio-agent)](LICENSE)
-[![WeChat](https://img.shields.io/badge/WeChat-join_chat-07C160?logo=wechat&logoColor=white)](#community)
+[![license](https://img.shields.io/github/license/snowshadow/qwen-audio-agent-python)](LICENSE)
+
+## Origin and license
+
+This repository is an **independent derivative** of
+[QwenAudio/qwen-audio-agent](https://github.com/QwenAudio/qwen-audio-agent),
+released under [Apache License 2.0](LICENSE). It is **not** an official
+QwenAudio release.
+
+The original project remains the source for the npm package
+`qwen-audio-agent` and the v1 desktop releases linked below. This tree keeps
+that license, the upstream attribution in [`NOTICE`](NOTICE), and rewrites the
+Gateway runtime in Python / LangGraph. ACP backend adapters stay in Node.
+
+Use this repository when you want the Python Gateway. `npm install -g qwen-audio-agent`
+still installs the upstream project.
 
 ## Agent Presence
 
@@ -26,6 +40,8 @@ tells you:
 
 ## News
 
+- **2026-08-31 · Independent repository**
+  This tree is published separately from the upstream project. Historical v1 tags below remain on [QwenAudio/qwen-audio-agent](https://github.com/QwenAudio/qwen-audio-agent).
 - **2026-08-27 · v2.0.0 (In development)**
   🚧 Gateway core runs in Python with two LangGraph state machines; ACP backends stay on Node. This is a voice product, not a LangGraph Platform app. v1 frontend extensions (MCP, OpenAPI, knowledge retrieval, web search, session-end memory extraction, local wake word) are not wired on that path.
 - **2026-08-20 · [v1.11.0](https://github.com/QwenAudio/qwen-audio-agent/releases/tag/v1.11.0)**
@@ -144,14 +160,15 @@ Requires Node.js 22.22.2+ or 24.15.0+, npm 10+, Python 3.12–3.14, and
 [uv](https://docs.astral.sh/uv/). The first Gateway launch prepares the locked
 Python runtime with `uv run --frozen --no-dev`.
 
-Install from npm (recommended):
+Install **this** independent repository from GitHub:
 
 ```bash
-npm install -g qwen-audio-agent
+npm install -g git+https://github.com/snowshadow/qwen-audio-agent-python.git
 ```
 
-For building from source, installing from GitHub, and obtaining a DashScope
-API Key, see the [installation guide](docs/getting-started/install.md).
+`npm install -g qwen-audio-agent` still installs the upstream project. For
+building from source and obtaining a DashScope API Key, see the
+[installation guide](docs/getting-started/install.md).
 
 ## Quick Start
 
@@ -207,7 +224,7 @@ npm run example:car:server   # Terminal 1: car Agent server
 npm run example:car:web      # Terminal 2: car UI
 ```
 
-See [examples/car](https://github.com/QwenAudio/qwen-audio-agent/tree/main/examples/car) for details.
+See [examples/car](examples/car) for details.
 
 ## Desktop App
 
@@ -298,15 +315,11 @@ For more build, test, and release instructions, see [CONTRIBUTING.md](CONTRIBUTI
 
 ## Community
 
-You can start discussions directly in [GitHub Issues](https://github.com/QwenAudio/qwen-audio-agent/issues).
+File issues and discussions in this repository:
+[GitHub Issues](https://github.com/snowshadow/qwen-audio-agent-python/issues).
 
-For users in China, scan the QR codes below to join the WeChat group. If the
-group QR code is full or expired, scan either maintainer's personal QR code
-to be invited.
-
-| WeChat Group | Personal | Personal |
-| :---: | :---: | :---: |
-| <img src="docs/wechat-group-qr.png" width="240" alt="WeChat group QR code"> | <img src="docs/wechat-contact-qr.png" width="240" alt="Li Xu personal WeChat QR code"> | <img src="docs/wechat-pigeon-dan-qr.png" width="240" alt="Pigeon.Dan personal WeChat QR code"> |
+Upstream community channels, including WeChat groups, belong to
+[QwenAudio/qwen-audio-agent](https://github.com/QwenAudio/qwen-audio-agent).
 
 ## Contributing and Security
 
@@ -317,4 +330,5 @@ to be invited.
 
 ## License
 
-[Apache License 2.0](LICENSE)
+[Apache License 2.0](LICENSE). This independent derivative retains the
+upstream copyright and attribution in [`NOTICE`](NOTICE).

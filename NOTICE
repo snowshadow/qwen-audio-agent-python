@@ -1,5 +1,16 @@
 qwen-audio-agent
 Copyright 2026 qwen-audio-agent contributors
 
+This distribution is an independent derivative of the qwen-audio-agent
+project originally published at:
+
+    https://github.com/QwenAudio/qwen-audio-agent
+
+The original Work is licensed under the Apache License, Version 2.0.
+This repository is not an official release of the QwenAudio organization.
+
+The Gateway runtime in this tree is rewritten in Python using LangGraph.
+ACP backend adapters remain in Node.js.
+
 This product includes software developed by third-party open-source projects.
 See THIRD_PARTY_NOTICES.md for the primary component notices.
