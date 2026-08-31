@@ -25,7 +25,7 @@ export function defineBackendAdapter(adapter, { name = 'Backend adapter' } = {})
 }
 
 /**
- * Add the small application-host surface used by createGatewayApplication.
+ * Add the small application-host surface for custom BackendPort adapters.
  * Backend execution still goes exclusively through BackendPort methods.
  */
 export function createBackendAgentHost(adapter, options = {}) {
@@ -46,7 +46,9 @@ export function createBackendAgentHost(adapter, options = {}) {
     ),
     subscribe: listener => backend.subscribe(listener),
     canRecoverDelegatedWork: task => (
-      backend.canRecoverDelegatedWork?.(task) === true
+      typeof backend.canRecoverDelegatedWorkSync === 'function'
+        ? backend.canRecoverDelegatedWorkSync(task) === true
+        : backend.canRecoverDelegatedWork?.(task) === true
     ),
     recoverDelegatedWork: (task, context) => {
       if (typeof backend.recoverDelegatedWork !== 'function') {

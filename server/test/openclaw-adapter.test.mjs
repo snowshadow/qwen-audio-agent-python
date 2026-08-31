@@ -124,6 +124,29 @@ test('cancels an OpenClaw child by run and Session identity', async () => {
   })
 })
 
+test('probes both the OpenClaw run and Session before recovery', async () => {
+  FakeWebSocket.requests = []
+  FakeWebSocket.waitResponses = [{ status: 'timeout' }]
+  const adapter = new OpenClawAcpDelegationAdapter({
+    baseUrl: 'http://127.0.0.1:18789',
+    WebSocketImpl: FakeWebSocket,
+  })
+
+  assert.equal(await adapter.canRecover({
+    runId: 'run-recovery',
+    sessionId: 'agent:child:recovery',
+  }), true)
+  const requests = FakeWebSocket.requests.filter(item => (
+    item.method !== 'connect'
+  ))
+  assert.deepEqual(requests.map(item => item.method), [
+    'agent.wait',
+    'chat.history',
+  ])
+  assert.equal(requests[0].params.timeoutMs, 1)
+  assert.equal(requests[1].params.sessionKey, 'agent:child:recovery')
+})
+
 test('sets and verifies an OpenClaw Session model through Gateway RPC', async () => {
   FakeWebSocket.requests = []
   const adapter = new OpenClawAcpDelegationAdapter({

@@ -21,7 +21,7 @@
 ## News
 
 - **2026-08-27 · v2.0.0（开发中）**
-  🚧 下一代版本正在积极开发，持续完善 Agent 架构、任务生命周期、多模态输入、记忆与扩展能力。
+  🚧 Gateway 核心在 Python 中，由两张 LangGraph 状态机负责有界控制流；ACP 后台仍在 Node。这是语音产品，不是 LangGraph Platform 应用。v1 的前台扩展（MCP、OpenAPI、知识检索、联网搜索、会话结束记忆抽取、本地唤醒词）尚未接到该路径。
 - **2026-08-20 · [v1.11.0](https://github.com/QwenAudio/qwen-audio-agent/releases/tag/v1.11.0)**
   🧩 开放可嵌入 Gateway 与 Realtime Provider 扩展；🛠️ 支持安装与管理 Agent Skill；📎 TUI 支持多模态输入；🎨 皮肤动画联动运行状态。
 - **2026-08-13 · [v1.10.0](https://github.com/QwenAudio/qwen-audio-agent/releases/tag/v1.10.0)**
@@ -64,7 +64,7 @@ https://github.com/user-attachments/assets/ab570531-8da9-4af4-93fa-244bb6614c05
 - 支持创建多个独立任务，由后台 Agent 异步执行，并持续追踪任务状态
 - 任务结果自动回到当前对话，支持继续追问和修改
 - 支持 WebUI、终端 TUI 和桌面悬浮球（macOS / Windows / Linux）
-- 桌面版自动休眠时断开云端 Realtime，但不停止已提交任务；可通过自定义快捷键或本地唤醒词恢复
+- 桌面版自动休眠时断开云端 Realtime，但不停止已提交任务；可通过自定义快捷键唤醒。本地唤醒词尚未接入 v2 Python Gateway。
 - 支持当前用户的长期个性化覆盖与跨会话记忆
 
 ## 参考架构
@@ -83,6 +83,26 @@ https://github.com/user-attachments/assets/ab570531-8da9-4af4-93fa-244bb6614c05
 [语音 Agent 架构演示文档](docs/voice-agent-architecture-presentation.zh.md)。
 
 </details>
+
+### 运行时实现（v2 开发中）
+
+v2 是实时语音 Gateway 产品。LangGraph 只负责两个有界状态机，不是整个运行时：
+
+- `FrontendTurnGraph` 负责一轮实时对话的工具准入与路由。
+- `WorkGraph` 按 Task 保存生命周期快照，长耗时后台 I/O 留在图外。
+
+Node 与 Electron 入口启动 Python CLI。已配置的办事 Agent 仍通过
+`BackendPort` 走现有 JavaScript ACP 适配器。本仓库不是 LangGraph Platform
+应用，也不把这两张图作为独立库发布。
+
+持久化 Task Repository 仍是公开任务状态、结果与通知租约的唯一事实源；
+LangGraph checkpoint 只是执行快照。打包后的 Desktop 携带锁定的 Python 工程，
+但不内置解释器或 `uv`，主机需要提供其中一种。最终结果会等到安全的双工窗口。
+语音交付只在当前客户端上报 `playback.started` 后确认；纯文本交付在响应成功
+完成后确认。
+
+活路径目录与尚未接入的扩展见
+[架构文档](docs/architecture.zh.md#当前-v2-实现)。
 
 ## Agent 支持
 
@@ -107,7 +127,11 @@ https://github.com/user-attachments/assets/ab570531-8da9-4af4-93fa-244bb6614c05
 
 ## 安装
 
-需要 Node.js 22.22.2+ 或 24.15.0+、npm 10+。一键安装（推荐）：
+需要 Node.js 22.22.2+ 或 24.15.0+、npm 10+、Python 3.12–3.14 和
+[uv](https://docs.astral.sh/uv/)。首次启动 Gateway 时，程序会通过
+`uv run --frozen --no-dev` 准备锁定的 Python 运行环境。
+
+推荐从 npm 安装：
 
 ```bash
 npm install -g qwen-audio-agent
@@ -140,7 +164,7 @@ QWEN_AUDIO_AGENT_BACKEND_MODEL=qwen3.7-max
 > 图片/画面帧与原生视频传输仍保持关闭，待对应客户端和 Gateway 链路实现。
 
 桌面版或 `qwenaudio config set --realtime-model <id>` 配置 Gateway 统一使用的模型；
-CLI 修改后需要重启 Gateway。WebUI 与 TUI 只显示当前生效模型，不单独覆盖模型。
+CLI 修改后需要重启 Gateway。WebUI 与 TUI 不单独覆盖配置模型。
 
 2. 启动 Gateway，另开终端启动 TUI（也可用 `qwenaudio webui` 启动浏览器界面）：
 
@@ -172,8 +196,8 @@ npm run example:car:web      # 终端 2：座舱 UI
 
 桌面版提供常驻桌面的语音悬浮球，内置 Gateway，支持空闲自动休眠、自定义唤醒
 快捷键和本地语音唤醒。休眠时会断开 Realtime 前台，但桌面进程、Gateway、后台
-Agent 和已提交任务仍继续运行；它不等于退出或重启桌面版。任务完成后可以唤醒
-桌面版，并把结果带回当前对话。从发布页下载对应平台安装包，或从源码构建：
+Agent 和已提交任务仍继续运行；它不等于退出或重启桌面版。休眠期间完成的
+结果保持待交付，桌面版唤醒或重连后再回到对话。从发布页下载对应平台安装包，或从源码构建：
 
 ```bash
 npm run desktop:build:local      # macOS
@@ -200,8 +224,11 @@ Agent 选择、后台常驻服务、通用 ACP 入口和权限模式见
 
 ## 个性化与记忆
 
-用户数据保存在 `~/.config/qwaudio/`（`ASSISTANT.md`、`USER.md`、`MEMORY.md`、
-`tasks.json`、`logs/`），只存本机、不进仓库。详见
+默认情况下，CLI 将共享助手数据与运行时状态保存在
+`~/.config/qwaudio/` 下。Desktop 用 `QWAUDIO_DATA_DIR` 保存共享身份、
+画像、记忆、配置和清单，用 `QWAUDIO_CONFIG_DIR` 保存自己的 Gateway 租约、
+Task 账本、对话、checkpoint、皮肤和日志。它们都只存本机、不进仓库。详见
+[配置说明](docs/configuration.zh.md) 和
 [助手画像、用户偏好与记忆](docs/reference/memory.zh.md)。
 
 ## 使用注意事项
@@ -218,6 +245,18 @@ Agent 选择、后台常驻服务、通用 ACP 入口和权限模式见
 [配置说明](docs/configuration.zh.md)。
 
 ## 源码开发
+
+v2 源码中的 Gateway 运行时还需要 Python 3.12–3.14 与
+[uv](https://docs.astral.sh/uv/)。
+
+```bash
+uv sync --frozen
+uv run pytest
+uv run ruff check src tests
+```
+
+`npm test` 只覆盖 Node 工作区。改 Gateway 前请运行 `npm run test:python`
+（或上面的 `uv` 命令）。CI 会分别运行两者。
 
 ```bash
 npm install

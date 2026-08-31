@@ -16,10 +16,67 @@ const MANIFESTS = [
   'package.json',
   ...WORKSPACES.map(workspace => `${workspace}/package.json`),
 ]
-const VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|[a-zA-Z-][0-9a-zA-Z-]*))*)?(?:\+[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*)?$/
+const VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[a-zA-Z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
+const PEP440_PRE_RELEASE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(alpha|beta|rc)\.([0-9]\d*))?(?:\+([0-9A-Za-z.-]+))?$/i
+const PRE_RELEASE_TAGS = { alpha: 'a', beta: 'b', rc: 'rc' }
 
 export function isValidVersion(version) {
   return VERSION_PATTERN.test(String(version))
+}
+
+export function toPep440(version) {
+  const match = String(version).match(PEP440_PRE_RELEASE)
+  if (!match) {
+    throw new Error(`无法转换为 PEP 440 版本：${version}`)
+  }
+  const [, major, minor, patch, label, number, local] = match
+  const core = `${major}.${minor}.${patch}`
+  const tagged = label ? `${core}${PRE_RELEASE_TAGS[label.toLowerCase()]}${number}` : core
+  return local ? `${tagged}+${local}` : tagged
+}
+
+export function readDeclaredPythonVersion(root) {
+  const pyprojectPath = resolve(root, 'pyproject.toml')
+  const initPath = resolve(root, 'src/qwen_audio_agent/__init__.py')
+  if (!existsSync(pyprojectPath) || !existsSync(initPath)) {
+    throw new Error('缺少 pyproject.toml 或 src/qwen_audio_agent/__init__.py')
+  }
+  const pyproject = readFileSync(pyprojectPath, 'utf8').match(/^version = "([^"]+)"/m)
+  const module = readFileSync(initPath, 'utf8').match(/^__version__ = "([^"]+)"/m)
+  if (!pyproject) throw new Error('pyproject.toml 缺少 version')
+  if (!module) throw new Error('src/qwen_audio_agent/__init__.py 缺少 __version__')
+  return { pyproject: pyproject[1], module: module[1] }
+}
+
+export function assertPythonVersionsAligned(root, npmVersion) {
+  const { pyproject, module } = readDeclaredPythonVersion(root)
+  if (pyproject !== module) {
+    throw new Error(
+      `pyproject.toml 版本 ${pyproject} 与 __version__ ${module} 不一致`,
+    )
+  }
+  const major = Number(String(npmVersion).split('.', 1)[0])
+  if (Number.isFinite(major) && major >= 2) {
+    const expected = toPep440(npmVersion)
+    if (pyproject !== expected) {
+      throw new Error(
+        `Python 版本 ${pyproject} 必须对应 npm ${npmVersion}（PEP 440：${expected}）`,
+      )
+    }
+  }
+  const uvLockPath = resolve(root, 'uv.lock')
+  if (!existsSync(uvLockPath)) return
+  const locked = readFileSync(uvLockPath, 'utf8').match(
+    /name = "qwen-audio-agent-python"\nversion = "([^"]+)"/,
+  )
+  if (!locked) {
+    throw new Error('uv.lock 缺少 qwen-audio-agent-python 版本记录')
+  }
+  if (locked[1] !== pyproject) {
+    throw new Error(
+      `uv.lock 版本 ${locked[1]} 与 pyproject.toml ${pyproject} 不一致`,
+    )
+  }
 }
 
 export function nextVersion(current, requested) {
@@ -92,6 +149,42 @@ export function updateVersions(root, requested) {
     lock.packages[workspace].version = version
   }
   updates.push({ path: lockPath, content: serializeJson(lock) })
+
+  const pep440 = toPep440(version)
+  const pyprojectPath = resolve(root, 'pyproject.toml')
+  if (existsSync(pyprojectPath)) {
+    const pyproject = readFileSync(pyprojectPath, 'utf8')
+    if (!/^version = "/m.test(pyproject)) {
+      throw new Error('pyproject.toml 缺少 version')
+    }
+    updates.push({
+      path: pyprojectPath,
+      content: pyproject.replace(/^version = "[^"]+"/m, `version = "${pep440}"`),
+    })
+  }
+  const initPath = resolve(root, 'src/qwen_audio_agent/__init__.py')
+  if (existsSync(initPath)) {
+    const initSource = readFileSync(initPath, 'utf8')
+    if (!/^__version__ = "/m.test(initSource)) {
+      throw new Error('src/qwen_audio_agent/__init__.py 缺少 __version__')
+    }
+    updates.push({
+      path: initPath,
+      content: initSource.replace(/^__version__ = "[^"]+"/m, `__version__ = "${pep440}"`),
+    })
+  }
+  const uvLockPath = resolve(root, 'uv.lock')
+  if (existsSync(uvLockPath)) {
+    const uvLock = readFileSync(uvLockPath, 'utf8')
+    const locked = uvLock.replace(
+      /(name = "qwen-audio-agent-python"\nversion = ")[^"]+(")/,
+      `$1${pep440}$2`,
+    )
+    if (locked === uvLock && !uvLock.includes(`version = "${pep440}"`)) {
+      throw new Error('uv.lock 缺少 qwen-audio-agent-python 版本记录')
+    }
+    updates.push({ path: uvLockPath, content: locked })
+  }
 
   for (const relativePath of ['README.md', 'README_ZH.md']) {
     const path = resolve(root, relativePath)

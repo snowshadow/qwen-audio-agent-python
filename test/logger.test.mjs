@@ -93,6 +93,23 @@ test('redacts secrets recursively from fields, errors and free text', async t =>
   assert.equal(entry.error.authorization, '[REDACTED]')
 })
 
+test('redacts assigned, command-line, provider and private-key secrets', () => {
+  const value = [
+    `GITHUB_TOKEN=ghp_${'a'.repeat(36)}`,
+    '--password hunter2',
+    'AWS_ACCESS_KEY_ID=AKIAABCDEFGHIJKLMNOP',
+    'api_key: secret-value',
+    '-----BEGIN PRIVATE KEY-----\nprivate-material\n-----END PRIVATE KEY-----',
+  ].join('\n')
+
+  const scrubbed = redactLogValue(value)
+  assert.doesNotMatch(
+    scrubbed,
+    /hunter2|secret-value|ghp_|AKIAABCDEFGHIJKLMNOP|private-material/,
+  )
+  assert.match(scrubbed, /\[REDACTED\]/)
+})
+
 test('honors log levels and rotates bounded files', async t => {
   const directory = temporaryDirectory(t)
   const logger = createLogger({

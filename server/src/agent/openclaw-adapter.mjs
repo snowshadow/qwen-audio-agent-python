@@ -5,6 +5,7 @@ import { PACKAGE_VERSION } from '../core/package-version.mjs'
 import { AgentError, requestSignal } from './backend-adapter.mjs'
 
 const WAIT_SLICE_MS = 30_000
+const RECOVERY_PROBE_TIMEOUT_MS = 4_000
 const MIN_GATEWAY_PROTOCOL = 3
 const MAX_GATEWAY_PROTOCOL = 4
 
@@ -239,6 +240,33 @@ export class OpenClawAcpDelegationAdapter {
       }
       return { content, completion }
     }
+  }
+
+  async canRecover({ runId, sessionId, signal }) {
+    const id = clean(runId)
+    const key = clean(sessionId)
+    if (!id || !key) return false
+    const gateway = await this.gateway()
+    const completion = await gateway.call('agent.wait', {
+      runId: id,
+      // A one-millisecond wait is a read-only existence probe, not a second
+      // long-running waiter. `timeout` still proves that the run is alive.
+      timeoutMs: 1,
+    }, {
+      signal,
+      timeoutMs: RECOVERY_PROBE_TIMEOUT_MS,
+    })
+    if (!['timeout', 'ok', 'completed'].includes(completion?.status)) {
+      return false
+    }
+    const history = await gateway.call('chat.history', {
+      sessionKey: key,
+      limit: 1,
+    }, {
+      signal,
+      timeoutMs: RECOVERY_PROBE_TIMEOUT_MS,
+    })
+    return Array.isArray(history?.messages)
   }
 
   async setSessionModel({ sessionKey, model, signal }) {

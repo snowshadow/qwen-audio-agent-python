@@ -178,10 +178,10 @@ startedAt, heartbeatAt }`。定位实例的方式：读租约、探活 `origin`�
 ## 启动门禁（setup gate）
 
 缺少必填的实时语音凭据（`DASHSCOPE_API_KEY`，或选择 Speech-to-Speech 时的
-服务地址）时，`server/src/index.mjs` 在触碰租约之前即拒绝启动：进程以非零
-退出，错误信息点名每一个缺失的键。`QWEN_AUDIO_ALLOW_UNCONFIGURED=1` 供
-从不建立语音连接的调试场景显式跳过。锁定测试：`test/gateway-setup.test.mjs`、
-`test/consumer-install.test.mjs`。
+服务地址）时，公开 Gateway 入口 `server/src/python-gateway-entry.mjs` 在触碰租约
+之前即拒绝启动：进程以非零退出，错误信息点名每一个缺失的键。
+`QWEN_AUDIO_ALLOW_UNCONFIGURED=1` 供从不建立语音连接的调试场景显式跳过。
+该 JavaScript 入口只负责 setup gate 与进程生命周期，实际 Gateway 位于 Python。
 
 ## 运行时基线
 

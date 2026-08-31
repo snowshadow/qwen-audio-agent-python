@@ -7,7 +7,7 @@ __pycache__/
 .env
 .env.*
 !.env.example
-runtime/
+/runtime/
 *.log
 .DS_Store
 Thumbs.db
@@ -33,3 +33,4 @@ config/opencode/.gitignore
 config/opencode/package.json
 config/opencode/package-lock.json
 bun.lock
+.gitnexus/

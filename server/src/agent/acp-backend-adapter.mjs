@@ -12,9 +12,11 @@ import {
 import {
   activityFromUpdate,
   coordinatorKey,
+  legacyProjectSessionKey,
   messageFromUpdate,
   nativeToolOutput,
   projectSessionKey,
+  sessionOwnerId,
   sessionSummary,
 } from './acp-backend-session-utils.mjs'
 import { createAcpClient } from './acp-client-factory.mjs'
@@ -40,6 +42,7 @@ import { buildAcpCoordinatorInstruction } from './acp-coordinator-contract.mjs'
 const MAX_SESSION_RESULTS = 100
 const MAX_DELEGATION_RESULT_CHARS = 12_000
 const MAX_DELEGATION_RECENT_UPDATES = 5
+const DEFAULT_RECOVERY_PROBE_TIMEOUT_MS = 5_000
 // Persistent coordinator Sessions are valid only for the contract that
 // created them. Project Sessions are user work and remain independent.
 const COORDINATOR_CONTRACT_VERSION = 6
@@ -189,6 +192,7 @@ export class AcpBackendAdapter {
     backendAvailable = endpointAvailable,
     readinessPollMs = 250,
     readinessTimeoutMs = Math.min(timeoutMs, 60_000),
+    recoveryProbeTimeoutMs = DEFAULT_RECOVERY_PROBE_TIMEOUT_MS,
     sessionToolServer,
     nativeDelegationAdapter,
     builtinMcp = builtinMcpServers(),
@@ -230,9 +234,13 @@ export class AcpBackendAdapter {
     this.builtinMcpLifecycle = !client && clientFactory === createAcpClient
       ? createBuiltinMcpLifecycle(this.builtinMcp)
       : { markUsed() {}, close: () => Promise.resolve() }
+    this.activeSessionToolBindings = new WeakMap()
     this.permissionBroker = new PermissionBroker({
       protocol: this.protocol,
       permissionMode: this.permissionMode,
+      isTrustedInternalToolRequest: context => (
+        this.isTrustedInternalToolRequest(context)
+      ),
     })
     this.coordinatorSessions = new Map()
     this.coordinatorSessionPromises = new Map()
@@ -246,6 +254,7 @@ export class AcpBackendAdapter {
     // whether it stays there or delegates to a project Session.
     this.coordinationRuns = new Map()
     this.workControllers = new Map()
+    this.workOwners = new Map()
     this.workEventListeners = new Set()
     this.runtimeState = new BackendRuntimeState({
       protocol: this.protocol,
@@ -258,6 +267,10 @@ export class AcpBackendAdapter {
     this.backendAvailable = client ? null : backendAvailable
     this.readinessPollMs = readinessPollMs
     this.readinessTimeoutMs = readinessTimeoutMs
+    this.recoveryProbeTimeoutMs = Math.max(
+      1,
+      Number(recoveryProbeTimeoutMs) || DEFAULT_RECOVERY_PROBE_TIMEOUT_MS,
+    )
     this.client = client || clientFactory({
       label: this.profile.label,
       connection: this.profile.acpConnection,
@@ -332,14 +345,17 @@ export class AcpBackendAdapter {
     const id = clean(taskId)
     if (!id) return this.runtimeStatus()
     const run = this.coordinationRuns.get(id)
-    if (!run || (ownerId !== undefined && run.ownerId !== clean(ownerId))) {
+    if (!run || run.ownerId !== clean(ownerId)) {
       return { taskId: id, state: 'not_found', activity: [] }
     }
     const delegation = run.delegation
     if (!delegation) {
       return { taskId: id, state: 'working', activity: [] }
     }
-    const current = this.statusForDelegation({ delegation_id: delegation.id })
+    const current = this.statusForDelegation(
+      { delegation_id: delegation.id },
+      run.ownerId,
+    )
     return {
       taskId: id,
       state: current.status === 'running' ? 'working' : current.status,
@@ -482,7 +498,12 @@ export class AcpBackendAdapter {
       return this.coordinatorSessionPromises.get(key)
     }
     const pending = (async () => {
-      const stored = this.registry.get(key)
+      const stored = this.registry.get(key, {
+        ownerId,
+        // Legacy coordinator records are safe to migrate because their
+        // storage key has always contained the encoded owner identity.
+        allowUnowned: true,
+      })
       const contractVersion = COORDINATOR_CONTRACT_VERSION
       let session
       const canResumeStored = Boolean(
@@ -526,10 +547,11 @@ export class AcpBackendAdapter {
         })
         session.isNew = true
       }
+      session.ownerId = clean(ownerId)
       session.contractVersion = contractVersion
       await this.configureSession(session, 'coordinator')
       this.coordinatorSessions.set(key, session)
-      this.registry.set(key, session)
+      this.registry.set(key, session, { ownerId })
       return session
     })().finally(() => this.coordinatorSessionPromises.delete(key))
     this.coordinatorSessionPromises.set(key, pending)
@@ -564,6 +586,40 @@ export class AcpBackendAdapter {
     })
     this.coordinatorToolRegistrationPromises.set(key, pending)
     return pending
+  }
+
+  isTrustedInternalToolRequest({ params, session, toolName } = {}) {
+    if (!toolName || !session || typeof session !== 'object') return false
+    const binding = this.activeSessionToolBindings.get(session)
+    if (!binding) return false
+    const ownerId = clean(session.ownerId)
+    const sessionId = clean(session.sessionId)
+    const runId = clean(session.coordinationRunId)
+    const permissionScopeId = clean(session.permissionScopeId)
+    if (
+      !ownerId
+      || !sessionId
+      || !runId
+      || !permissionScopeId
+      || clean(params?.sessionId) !== sessionId
+      || session.role !== 'coordinator'
+      || binding.ownerId !== ownerId
+      || binding.sessionId !== sessionId
+      || binding.runId !== runId
+      || binding.permissionScopeId !== permissionScopeId
+      || binding.run !== this.coordinationRuns.get(runId)
+      || binding.run.ownerId !== ownerId
+      || binding.run.sessionId !== sessionId
+      || !this.activeCoordinatorTurns.has(sessionId)
+    ) {
+      return false
+    }
+    const registration = this.coordinatorToolRegistrations.get(
+      coordinatorKey(ownerId, this.protocol),
+    )
+    if (registration !== binding.registration) return false
+    return Array.isArray(session.mcpServers)
+      && session.mcpServers.includes(registration.descriptor)
   }
 
   coordinatorMeta(ownerId) {
@@ -857,39 +913,117 @@ export class AcpBackendAdapter {
     if (!sessionId) return
     const delegationId = clean(output.runId)
     if (!delegationId) return
+    const directory = clean(
+      merged.rawInput?.cwd
+      || merged.rawInput?.directory
+      || this.directory,
+    )
+    const title = bounded(
+      merged.rawInput?.label
+      || merged.rawInput?.task
+      || merged.rawInput?.message,
+      160,
+    ) || this.profile.defaultDelegationTitle || `${this.label} 项目任务`
+    this.rememberProjectSession({
+      sessionId,
+      cwd: directory,
+      title,
+    }, run.ownerId)
     run.delegation = this.createNativeDelegation(run, {
       delegationId,
       sessionId,
-      directory: clean(
-        merged.rawInput?.cwd
-        || merged.rawInput?.directory
-        || this.directory,
-      ),
-      title: bounded(
-        merged.rawInput?.label
-        || merged.rawInput?.task
-        || merged.rawInput?.message,
-        160,
-      ) || this.profile.defaultDelegationTitle || `${this.label} 项目任务`,
+      directory,
+      title,
     })
   }
 
-  async listProjectSessions({ query, limit } = {}) {
+  projectSessionRecord(ownerId, sessionId, { backendSession = null } = {}) {
+    const owner = clean(ownerId)
+    const id = clean(sessionId)
+    if (!owner || !id) return null
+    const key = projectSessionKey(owner, this.protocol, id)
+    let record = this.registry.getProject(key, {
+      ownerId: owner,
+      // The owner is encoded into this key, so an intermediate record written
+      // before ownerId became an explicit field remains attributable.
+      allowUnowned: true,
+    })
+    if (record) {
+      if (!clean(record.ownerId)) {
+        this.registry.setProject(key, record, { ownerId: owner })
+        record = this.registry.getProject(key, { ownerId: owner })
+      }
+      return record
+    }
+
+    const legacyKey = legacyProjectSessionKey(this.protocol, id)
+    const legacy = this.registry.getProject(legacyKey)
+    const provenBackendOwner = sessionOwnerId(backendSession)
+    if (!legacy) return null
+    const legacyOwner = clean(legacy.ownerId)
+    // Conflicting durable ownership is never overwritten by fresh global
+    // metadata. An unowned legacy record may migrate only when the backend
+    // independently attributes that exact Session to the current owner.
+    if (legacyOwner ? legacyOwner !== owner : provenBackendOwner !== owner) {
+      return null
+    }
+
+    const migrated = {
+      ...legacy,
+      ...(backendSession || {}),
+      sessionId: id,
+      cwd: clean(backendSession?.cwd || legacy.cwd),
+      title: clean(backendSession?.title || legacy.title),
+    }
+    this.registry.setProject(key, migrated, { ownerId: owner })
+    this.registry.deleteProject(legacyKey)
+    return this.registry.getProject(key, { ownerId: owner })
+  }
+
+  ownsProjectSession(session, ownerId) {
+    const owner = clean(ownerId)
+    const id = clean(session?.sessionId)
+    if (!owner || !id) return false
+    const backendOwner = sessionOwnerId(session)
+    if (backendOwner && backendOwner !== owner) return false
+    if (this.projectSessionRecord(owner, id, { backendSession: session })) {
+      return true
+    }
+    if (backendOwner !== owner) return false
+    const legacy = this.registry.getProject(
+      legacyProjectSessionKey(this.protocol, id),
+    )
+    if (clean(legacy?.ownerId) && clean(legacy.ownerId) !== owner) {
+      return false
+    }
+    this.rememberProjectSession(session, owner)
+    return true
+  }
+
+  async listProjectSessions(ownerId, { query, limit } = {}) {
+    const owner = clean(ownerId)
+    if (!owner) return { sessions: [] }
     const sessions = await this.client.listSessions({
       limit: limit || 20,
     })
-    this.registry.setProjects(sessions
-      .filter(session => clean(session?.sessionId) && clean(session?.cwd))
-      .map(session => [
-        projectSessionKey(this.protocol, session.sessionId),
-        session,
-      ]))
+    const ownedSessions = sessions.filter(session => (
+      clean(session?.sessionId)
+      && clean(session?.cwd)
+      && this.ownsProjectSession(session, owner)
+    ))
     const coordinators = new Set(
       [...this.coordinatorSessions.values()].map(item => item.sessionId),
     )
+    const storedCoordinator = this.registry.get(
+      coordinatorKey(owner, this.protocol),
+      { ownerId: owner, allowUnowned: true },
+    )
+    if (storedCoordinator?.sessionId) {
+      coordinators.add(clean(storedCoordinator.sessionId))
+    }
     const needle = clean(query).toLowerCase()
     return {
-      sessions: sessions
+      sessions: ownedSessions
         .filter(session => !coordinators.has(clean(session.sessionId)))
         .map(sessionSummary)
         .filter(session => !needle || [
@@ -899,20 +1033,43 @@ export class AcpBackendAdapter {
     }
   }
 
-  rememberProjectSession(session) {
-    if (!clean(session?.sessionId) || !clean(session?.cwd)) return
+  rememberProjectSession(session, ownerId) {
+    const owner = clean(ownerId || sessionOwnerId(session))
+    if (!owner || !clean(session?.sessionId) || !clean(session?.cwd)) return
+    const declaredOwner = sessionOwnerId(session)
+    if (declaredOwner && declaredOwner !== owner) {
+      throw new AgentError(`${this.label} Session 所有者与当前用户不匹配`, {
+        status: 404,
+        protocol: this.protocol,
+      })
+    }
+    const legacy = this.registry.getProject(
+      legacyProjectSessionKey(this.protocol, session.sessionId),
+    )
+    if (clean(legacy?.ownerId) && clean(legacy.ownerId) !== owner) {
+      throw new AgentError(`${this.label} Session 已属于其他用户`, {
+        status: 404,
+        protocol: this.protocol,
+      })
+    }
     this.registry.setProject(
-      projectSessionKey(this.protocol, session.sessionId),
+      projectSessionKey(owner, this.protocol, session.sessionId),
       session,
+      { ownerId: owner },
     )
   }
 
-  findDelegation({ delegation_id: delegationId, session_id: sessionId }) {
+  findDelegation({ delegation_id: delegationId, session_id: sessionId }, ownerId) {
+    const owner = clean(ownerId)
+    if (!owner) return undefined
     return [...this.coordinationRuns.values()]
       .map(run => run.delegation)
       .find(record => (
-        (clean(delegationId) && record?.id === clean(delegationId))
-        || (clean(sessionId) && record?.sessionId === clean(sessionId))
+        record?.ownerId === owner
+        && (
+          (clean(delegationId) && record?.id === clean(delegationId))
+          || (clean(sessionId) && record?.sessionId === clean(sessionId))
+        )
       ))
   }
 
@@ -1001,7 +1158,7 @@ export class AcpBackendAdapter {
       ...session,
       cwd,
       title: clean(title || prompt),
-    })
+    }, run.ownerId)
     await this.configureSession(session, 'project')
     const record = this.createDelegation(run, {
       session,
@@ -1022,10 +1179,8 @@ export class AcpBackendAdapter {
     run,
     { session_id: sessionId, prompt },
   ) {
-    const active = this.findDelegation({ session_id: sessionId })
-    const remembered = this.registry.getProject(
-      projectSessionKey(this.protocol, sessionId),
-    )
+    const active = this.findDelegation({ session_id: sessionId }, run.ownerId)
+    let remembered = this.projectSessionRecord(run.ownerId, sessionId)
     let existing = null
     let cwd = clean(
       active?.directory
@@ -1037,7 +1192,11 @@ export class AcpBackendAdapter {
       })
       existing = sessions.find(item => (
         clean(item.sessionId) === clean(sessionId)
+        && this.ownsProjectSession(item, run.ownerId)
       ))
+      remembered = this.projectSessionRecord(run.ownerId, sessionId, {
+        backendSession: existing,
+      })
       cwd = clean(existing?.cwd)
     }
     if (!cwd) {
@@ -1057,7 +1216,7 @@ export class AcpBackendAdapter {
       ...session,
       cwd,
       title: existing?.title || remembered?.title,
-    })
+    }, run.ownerId)
     await this.configureSession(session, 'project')
     const record = this.createDelegation(run, {
       session,
@@ -1074,8 +1233,8 @@ export class AcpBackendAdapter {
     }
   }
 
-  statusForDelegation(input) {
-    const record = this.findDelegation(input)
+  statusForDelegation(input, ownerId) {
+    const record = this.findDelegation(input, ownerId)
     if (!record) return { status: 'not_found' }
     return {
       status: record.status,
@@ -1095,8 +1254,8 @@ export class AcpBackendAdapter {
     }
   }
 
-  async cancelDelegation(input) {
-    const record = this.findDelegation(input)
+  async cancelDelegation(input, ownerId) {
+    const record = this.findDelegation(input, ownerId)
     if (!record) return { status: 'not_found' }
     if (!['completed', 'failed', 'cancelled'].includes(record.status)) {
       record.status = 'cancelled'
@@ -1120,11 +1279,11 @@ export class AcpBackendAdapter {
 
   toolContext(run) {
     return {
-      listSessions: input => this.listProjectSessions(input),
+      listSessions: input => this.listProjectSessions(run.ownerId, input),
       startSession: input => this.startProjectSession(run, input),
       sendSession: input => this.continueProjectSession(run, input),
-      sessionStatus: input => this.statusForDelegation(input),
-      cancelSession: input => this.cancelDelegation(input),
+      sessionStatus: input => this.statusForDelegation(input, run.ownerId),
+      cancelSession: input => this.cancelDelegation(input, run.ownerId),
     }
   }
 
@@ -1224,10 +1383,24 @@ export class AcpBackendAdapter {
     run.sessionId = session.sessionId
     run.cwd = clean(session.cwd) || this.directory
     session.ownerId = clean(ownerId)
+    session.role = 'coordinator'
     session.coordinationRunId = clean(coordinationRunId)
     session.onEvent = onEvent
     session.permissionScopeId = permissionScopeId
     this.activeCoordinatorTurns.add(session.sessionId)
+    const internalToolBinding = registration
+      ? {
+          registration,
+          run,
+          ownerId: run.ownerId,
+          sessionId: clean(session.sessionId),
+          runId: run.coordinationRunId,
+          permissionScopeId,
+        }
+      : null
+    if (internalToolBinding) {
+      this.activeSessionToolBindings.set(session, internalToolBinding)
+    }
     try {
       // Re-supply MCP definitions on resume: ACP Sessions do not require the
       // agent to persist client-provided MCP connections across processes.
@@ -1266,6 +1439,7 @@ export class AcpBackendAdapter {
       this.registry.set(
         coordinatorKey(ownerId, this.protocol),
         session,
+        { ownerId },
       )
       return {
         run,
@@ -1273,6 +1447,12 @@ export class AcpBackendAdapter {
         result,
       }
     } finally {
+      if (
+        internalToolBinding
+        && this.activeSessionToolBindings.get(session) === internalToolBinding
+      ) {
+        this.activeSessionToolBindings.delete(session)
+      }
       this.activeCoordinatorTurns.delete(session.sessionId)
       this.cancelPermissionsForScope(permissionScopeId)
       if (session.permissionScopeId === permissionScopeId) {
@@ -1424,6 +1604,7 @@ export class AcpBackendAdapter {
       ? AbortSignal.any([signal, controller.signal])
       : controller.signal
     this.workControllers.set(taskId, controller)
+    this.workOwners.set(taskId, ownerId)
     try {
       const prompt = buildAcpCoordinatorInstruction({
         ...work,
@@ -1454,6 +1635,7 @@ export class AcpBackendAdapter {
     } finally {
       if (this.workControllers.get(taskId) === controller) {
         this.workControllers.delete(taskId)
+        this.workOwners.delete(taskId)
       }
     }
   }
@@ -1532,19 +1714,67 @@ export class AcpBackendAdapter {
     }
   }
 
-  canRecoverDelegatedWork(task) {
-    return Boolean(
-      this.nativeDelegationAdapter
-      && task?.delegation?.id
-      && task?.delegation?.sessionId,
+  async canRecoverDelegatedWork(task) {
+    const ownerId = clean(task?.ownerId)
+    const runId = clean(task?.delegation?.id)
+    const sessionId = clean(task?.delegation?.sessionId)
+    if (!ownerId || !runId || !sessionId || !this.nativeDelegationAdapter) {
+      return false
+    }
+    const remembered = this.registry.getProject(
+      projectSessionKey(ownerId, this.protocol, sessionId),
+      {
+        ownerId,
+        // This owner-scoped key is sufficient to migrate the short-lived
+        // intermediate format that omitted the duplicate ownerId field.
+        allowUnowned: true,
+      },
     )
+    if (!remembered || clean(remembered.sessionId) !== sessionId) return false
+    const directory = clean(task?.delegation?.directory)
+    if (directory && clean(remembered.cwd) !== directory) return false
+
+    if (typeof this.nativeDelegationAdapter.canRecover !== 'function') {
+      return false
+    }
+    const controller = new AbortController()
+    let timer
+    try {
+      const timeout = new Promise(resolvePromise => {
+        timer = setTimeout(() => {
+          controller.abort(new Error('Delegation recovery probe timed out'))
+          resolvePromise(false)
+        }, this.recoveryProbeTimeoutMs)
+        timer.unref?.()
+      })
+      const validation = Promise.resolve().then(() => (
+        this.nativeDelegationAdapter.canRecover({
+          runId,
+          sessionId,
+          ownerId,
+          signal: controller.signal,
+        })
+      ))
+      return await Promise.race([validation, timeout]) === true
+    } catch {
+      return false
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  canRecoverDelegatedWorkSync() {
+    // This adapter requires live native proof. The retained synchronous JS
+    // recovery path cannot obtain it and must fail closed without starting a
+    // detached probe.
+    return false
   }
 
   async recoverDelegatedWork(task, {
     signal,
     onEvent,
   } = {}) {
-    if (!this.canRecoverDelegatedWork(task)) {
+    if (!await this.canRecoverDelegatedWork(task)) {
       throw new AgentError(`${this.label} 无法恢复这项第三层任务`, {
         protocol: this.protocol,
       })
@@ -1625,14 +1855,22 @@ export class AcpBackendAdapter {
   }
 
   async cancelWork(taskId, { ownerId } = {}) {
-    const run = this.coordinationRuns.get(clean(taskId))
+    const id = clean(taskId)
+    const owner = clean(ownerId)
+    const run = this.coordinationRuns.get(id)
     const record = run?.delegation
-    if (run && run.ownerId !== clean(ownerId)) {
+    const activeOwner = run?.ownerId || this.workOwners.get(id)
+    if (!activeOwner || activeOwner !== owner) {
       throw new AgentError(`没有找到可取消的 ${this.label} 任务`, {
         protocol: this.protocol,
       })
     }
-    if (record) await this.cancelDelegation({ delegation_id: record.id })
+    if (record) {
+      await this.cancelDelegation(
+        { delegation_id: record.id },
+        run.ownerId,
+      )
+    }
 
     // ACP cancellation interrupts execution but does not let a client rewrite
     // the backend-owned Session history. Record one terminal boundary only
@@ -1640,7 +1878,7 @@ export class AcpBackendAdapter {
     // projected into the next coordinator turn and acknowledged on success.
     if (run?.sessionId) {
       this.registry.appendReconciliation(
-        coordinatorKey(ownerId, this.protocol),
+        coordinatorKey(owner, this.protocol),
         {
           kind: 'coordination_request_terminated',
           request_id: run.coordinationRequestId || clean(taskId),
@@ -1670,8 +1908,15 @@ export class AcpBackendAdapter {
   async cancel(taskId, options = {}) {
     const id = clean(taskId)
     const controller = this.workControllers.get(id)
-    if (!controller && !this.coordinationRuns.has(id)) {
+    const run = this.coordinationRuns.get(id)
+    const activeOwner = run?.ownerId || this.workOwners.get(id)
+    if (!controller && !run) {
       return { taskId: id, state: 'not_found' }
+    }
+    if (!activeOwner || activeOwner !== clean(options.ownerId)) {
+      throw new AgentError(`没有找到可取消的 ${this.label} 任务`, {
+        protocol: this.protocol,
+      })
     }
     await this.cancelWork(id, options)
     controller?.abort(new AgentError('用户已取消这项工作', {
@@ -1705,7 +1950,10 @@ export class AcpBackendAdapter {
         protocol: this.protocol,
       })
     }
-    const status = this.statusForDelegation({ delegation_id: record.id })
+    const status = this.statusForDelegation(
+      { delegation_id: record.id },
+      record.ownerId,
+    )
     const latest = status.recent_updates?.at(-1)
     const latestDetail = bounded(
       latest?.detail || latest?.tool || latest?.kind,
@@ -1744,7 +1992,10 @@ export class AcpBackendAdapter {
   async uiUrl(ownerId) {
     if (!this.profile.uiUrl) return null
     const key = coordinatorKey(ownerId, this.protocol)
-    const session = this.coordinatorSessions.get(key) || this.registry.get(key)
+    const session = this.coordinatorSessions.get(key) || this.registry.get(key, {
+      ownerId,
+      allowUnowned: true,
+    })
     return this.profile.uiUrl({
       baseUrl: this.baseUrl,
       sessionId: session?.sessionId || null,
@@ -1760,6 +2011,7 @@ export class AcpBackendAdapter {
       }))
     }
     this.workControllers.clear()
+    this.workOwners.clear()
     for (const run of this.coordinationRuns.values()) {
       run.delegation?.controller.abort(
         new Error(`${this.label} backend is shutting down`),

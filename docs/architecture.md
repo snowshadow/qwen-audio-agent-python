@@ -5,10 +5,111 @@ invariants are architecture changes, not local feature work.
 
 See the
 [Realtime Voice Chatbot Runtime Roadmap](https://github.com/QwenAudio/qwen-audio-agent/blob/main/docs/roadmap/frontend-chatbot-runtime.md)
-for the target boundary and staged refactor of the Realtime Voice Chatbot,
-asynchronous Task bridge, and single user-configured backend agent. Until each
-roadmap stage lands, this document remains the tested description of current
-runtime behavior.
+for the target boundary and migration history of the Realtime Voice Chatbot,
+asynchronous Task bridge, and single user-configured backend agent. This
+document, together with the tests, describes the current runtime behavior.
+
+## Current v2 implementation
+
+The Gateway runtime is implemented in Python under `src/qwen_audio_agent/`.
+LangGraph owns two bounded state machines, not the whole product. The public
+v2 baseline is this hybrid: Python Gateway graphs and runtime, Node ACP
+adapters, existing Desktop/Web/TUI hosts. It is not a LangGraph Platform
+application and does not publish the graphs as a standalone library. Do not
+rewrite ACP adapters in Python to “finish” the port.
+
+```text
+Desktop / WebUI / TUI
+          │ HTTP, WebSocket, playback receipts
+          ▼
+Python transport + realtime application ◄──► Realtime Provider
+          │ normalized tool call
+          ▼
+FrontendTurnGraph
+├── inline / control result returns to the current turn
+└── spawn_thinking ──► intake receipt ──► WorkGraph
+                                              │ BackendPort
+                                              ▼
+                                      configured backend
+                                              │ final Work result
+                                              ▼
+                                  ResultDeliveryCoordinator
+                                  safe window ──► voice: playback.started
+                                              text: response completed
+                                              │
+                                              ▼
+                                      durable Task acknowledgement
+```
+
+`FrontendTurnGraph` is scoped to one realtime turn. It validates and
+deduplicates calls, enforces capability, count, time, and result-size limits,
+and routes inline, control, and background tools. Its extension contract can
+checkpoint an approval interrupt before a side effect, although no tool in the
+current public catalog enables that path. It does not own audio, model
+responses, backend selection, or Work execution.
+
+`WorkGraph` is scoped to one Task. The owner scheduler, long-running backend
+operation, and adapter connection stay outside the graph. Normalized backend
+events resume the graph, which reduces them into bounded state and checkpoints
+before waiting again. The Task repository is updated from that state and
+publishes the public projection.
+
+State has one owner for each purpose:
+
+| State | Durable owner | Meaning |
+| --- | --- | --- |
+| Frontend and Work execution | LangGraph SQLite checkpointer, one thread per turn or Task | Bounded control-flow snapshot; safe graph resume point |
+| Small cross-thread indexes | LangGraph SQLite Store | Runtime lookup data such as a pending frontend approval |
+| Task lifecycle, result, and notification lease | JSON Task repository | Product ledger and delivery source of truth |
+| Conversation transcript | Conversation store | Recent user/assistant timeline; not graph state |
+| Native backend Session | Backend adapter | Backend-private continuity and recovery evidence |
+
+A checkpoint does not prove that an external side effect happened, that a
+backend Session still exists, or that audio reached the client. Those facts
+remain with their owning repository, adapter, or playback receipt.
+
+The Gateway launch entry used by the existing Node and Electron hosts is a
+compatibility shell. The process path is:
+
+```text
+Node / Electron host → python-gateway-entry.mjs → Python Gateway
+Python Work Runtime → NodeBackendBridge → python-backend-bridge.mjs
+                    → existing JavaScript backend adapters
+```
+
+The entry starts `python -m qwen_audio_agent.cli` and forwards structured
+readiness, signals, and exit status. CLI, TUI, Desktop UI/process code, and the
+retained backend adapters still have substantive JavaScript responsibilities;
+the active runtime path does not maintain a second Gateway or Task state
+machine there.
+
+The public `qwenaudio` and Desktop configuration flow is unchanged. The shell
+projects the existing environment contract, including `HOST`, `PORT`, Realtime
+settings, and `AGENT_PROTOCOL`, into the Python CLI. `QWAUDIO_DATA_DIR` owns the
+shared identity, profile, memory, configuration, and notes;
+`QWAUDIO_CONFIG_DIR` owns Gateway runtime state such as the lease, Task ledger,
+conversations, checkpoints, and skins. If the data directory is not set, it
+falls back to the configuration directory. The launcher uses
+`QWEN_AUDIO_AGENT_PYTHON` when set, the project virtual environment when
+present, and otherwise the locked `uv` project. Direct Python development may
+use `uv run python -m qwen_audio_agent.cli`. Packaged v2 Desktop builds include
+the locked project but not a Python interpreter or `uv`; the host must provide
+`uv` or point `QWEN_AUDIO_AGENT_PYTHON` at an environment with the runtime
+dependencies installed.
+
+The live catalog is the built-in realtime tools in section 3 plus the ACP
+backend bridge. These documented extension points are **not connected** on the
+Python Gateway path. The previous JavaScript Gateway runtime has been removed;
+public contract modules remain for a later port, and the related configuration
+keys currently have no effect:
+
+- Frontend MCP client (`QWEN_AUDIO_FRONTEND_MCP_CONFIG`)
+- Frontend OpenAPI adapter (`QWEN_AUDIO_FRONTEND_OPENAPI_CONFIG`)
+- Frontend Profile tool sources (`QWEN_AUDIO_FRONTEND_PROFILE`)
+- Knowledge retrieval provider
+- Frontend web search (`QWEN_AUDIO_WEB_SEARCH_PROVIDER`)
+- Session-end automatic memory reconciliation
+- Local wake-word detection (`QWEN_AUDIO_WAKE_WORD_ENABLED`)
 
 ## 1. User-visible model
 
@@ -21,18 +122,19 @@ layers:
    requiring tools, files, applications, code, device control, or multi-step
    execution.
 
-The backend may be an ACP Agent such as OpenCode, OpenClaw, Qoder, Qwen Code,
-Kimi Code, or Pi; a remote A2A Agent; or a custom BackendPort adapter.
-It may internally use tools, skills, agents, or other Sessions. Those are
-backend-private implementation details and do not create additional
-qwen-audio-agent layers. Protocol details remain inside ACP, A2A, or custom
-BackendPort adapters; backend-specific launch and capability behavior lives in
+The public Python CLI currently registers the retained ACP drivers, including
+OpenCode, OpenClaw, Qoder, Qwen Code, Kimi Code, and Pi. The BackendPort SDK
+also exports an A2A adapter for custom composition roots, but the public CLI
+does not select it. A backend may internally use tools, skills, agents, or
+other Sessions. Those are backend-private implementation details and do not
+create additional qwen-audio-agent layers. Protocol details remain inside
+their adapters; backend-specific launch and capability behavior lives in
 registered drivers.
 
 ## 2. Nonblocking request flow
 
 ```text
-final ASR
+final ASR → FrontendTurnGraph
    │
    ├─ immediately answerable ───────────────► Realtime speech
    │
@@ -42,7 +144,7 @@ final ASR
       Task accepted
           │ response returns to Realtime immediately
           ▼
-      owner FIFO queue
+      WorkGraph owner FIFO queue
           │
           ▼
       configured BackendPort
@@ -55,13 +157,14 @@ final ASR
 ```
 
 `spawn_thinking` never waits for the requested work. The user can continue
-speaking while multiple Task items are queued. For each owner, only one Task
-item is sent into the configured BackendPort at a time.
+speaking while multiple Task items are queued. Coordinator submissions use a
+FIFO lane per owner. A Task releases that lane when verified delegation begins,
+so delegated target work does not block the next coordinator submission.
 
 ## 3. Realtime boundary
 
 Realtime keeps a deliberately small tool set — few tools, low latency, no
-multi-step orchestration. The base tools are:
+multi-step orchestration. The maximum built-in catalog is:
 
 ```text
 spawn_thinking
@@ -72,12 +175,16 @@ get_current_time
 memory
 notes
 respond_agent_permission
+enter_sleep
 ```
+
+`spawn_thinking` is exposed only when a backend is configured. `enter_sleep`
+is exposed only when the connected client advertises the `sleeping` state.
 
 `memory` maintains two ordinary Markdown documents through one flat interface. Each call is one
 atomic `read`, `append`, or `replace` operation. `replace` locates a unique source fragment, and
-fails safely if that fragment is missing or ambiguous. Realtime may issue several calls
-in one turn; the Gateway merges their follow-up response. The documents have different authority:
+fails safely if that fragment is missing or ambiguous. Each call returns its own result to the
+Realtime model. The documents have different authority:
 
 - `user` is the current user's long-term personalization overlay: forms of
   address, relationship, the assistant's name for that user, language, expression
@@ -95,21 +202,16 @@ stance, and expression style. The assistant never edits it through memory. It is
 created from the packaged template once, preserved across upgrades, and reloaded
 for the next voice session after an edit.
 
-Besides explicit tool writes, a session-end extractor reconciles missed explicit user
-directives and durable facts. It routes the former to `USER.md` and the latter to
-`MEMORY.md` through the same context service used by the realtime tool. It never writes
-files directly or modifies `ASSISTANT.md`, rejects document-boundary mistakes and sensitive
-content, records outcomes in a local audit file, and silently disables itself when no
-text-model API key is configured.
-
 `notes` manages user-named lists (shopping lists, todos, reading lists) as
-frontend-owned volatile collections: single-call add, show, match-remove,
-clear, and drop with no backend involvement. Lists are item data, not memory;
-stable facts remain in `memory`, and list items are never written into the
-user preferences or factual memory. Item and list resolution matches exact text first, then a
-unique case-insensitive substring, and otherwise reports ambiguity with the
-candidate names back to the model for clarification. `clear` and `drop`
-additionally require an explicit destructive intent in the current turn.
+frontend-owned, locally persisted collections: single-call add, show,
+match-remove, clear, and drop with no backend involvement. Lists are item data,
+not memory; stable facts remain in `memory`, and list items are never written
+into the user preferences or factual memory. Item and list resolution matches
+exact text first, then a unique case-insensitive substring, and otherwise
+reports ambiguity with the candidate names back to the model for clarification.
+The tool contract tells the model to call `clear` and `drop` only after an
+explicit destructive request in the current turn; the data store does not add
+a second confirmation gate.
 
 `get_agent_task_status` is the single Realtime entry point for lifecycle,
 progress, and interim-result questions. The Gateway reads its own Task record
@@ -130,11 +232,13 @@ decision for a pending, owner-scoped permission request supplied by the
 Gateway. It may understand natural affirmative or negative wording such as
 “可以” or “不允许”, but it cannot invent consent without a current-turn user
 utterance, create a request, choose a tool, or modify a backend permission
-policy. Replies are limited to `always` and `reject`; `always` uses the
-Gateway's current frontend-session policy. The adapter still selects the
-narrowest safe per-request backend option, and the Gateway automatically
-approves later requests in the same frontend session. This does not create a
-persistent backend authorization rule.
+policy. Replies are limited to `always` and `reject`, and resolve only the
+pending request. `always` is retained as a wire-compatible approval token; it
+does not create a session grant. Approval maps only to a backend `allow_once`
+option. If the backend does not offer one, the request is cancelled rather than
+silently widened to `allow_always`. Rejection prefers `reject_once` and may use
+`reject_always` only to deny more broadly. The frontend never auto-approves a
+later request.
 
 The `objective` passed to `spawn_thinking` is a conservative interpretation of
 the user's request, not an execution plan. It must resolve references such as
@@ -145,21 +249,21 @@ does not receive the frontend persona, durable memory, or recent chat history.
 Execution-relevant facts must be resolved into the instruction instead of
 forwarding those documents.
 
-The Gateway automatically carries current-turn attachments as native protocol
-parts, never as a model-visible JSON manifest. Only work that explicitly
-depends on an earlier image or file uses the optional `input_refs` field with a
-conversation-local input ID. Task IDs, owner identity, lifecycle, timestamps,
-and routing remain structured Gateway/BackendPort data and are not placed in
-the backend Agent's instruction. The working directory and user time zone are
-not repeated in every prompt; protocol or backend runtime context owns them.
+The bridge gives the backend Agent a Task's `inputParts` as native protocol
+parts rather than a JSON manifest. `inputRefs` remains an internal compatibility
+field; no current public tool populates it or resolves earlier conversation
+attachments. Task IDs, owner identity, lifecycle, timestamps, and routing
+remain structured Gateway/BackendPort data and are not placed in the backend
+Agent's instruction. The working directory and user time zone are not repeated
+in every prompt; protocol or backend runtime context owns them.
 
 ## 4. Fixed Backend Agent Session
 
-The ACP adapter owns one persistent coordinator Session identity per owner and
-backend:
+The ACP adapter owns one persistent coordinator Session identity per protocol
+and owner. The exact storage key is adapter-private; it is derived from:
 
 ```text
-qwen-audio-agent:<owner>:backend
+<protocol> × <owner>
 ```
 
 The Gateway stores the native ACP Session ID behind that stable key and calls
@@ -184,6 +288,7 @@ A qwen-audio-agent Task record is a delivery receipt, not a mirror of the backen
 internal task graph.
 
 ```text
+scheduled ──► queued
 queued → running ─────────────────────────→ completed
    │        └→ delegated → finalizing ────────┘
    └────────────→ cancelling → cancelled
@@ -203,7 +308,11 @@ duplex conversation.
 Queued and directly running Tasks cannot be safely resumed after a Gateway
 restart, so they become failed with an explicit restart reason. A delegated
 Task may be reattached only when its adapter can verify the persisted native
-Session. Completed results and notification delivery state are persisted.
+Session and the matching WorkGraph checkpoint exists. Private recovery
+correlation is persisted but omitted from the public Task projection.
+Completed results and notification delivery state are persisted. Scheduled
+Work is rearmed from the Task ledger rather than inferred from a graph
+checkpoint.
 
 ## 6. Progress animation
 
@@ -241,17 +350,24 @@ conversation, resource, and voice presentation for each client.
 Completed results prefer the originating conversation. On a fresh connection,
 unfinished results from older conversations may be recovered for the same
 owner. A renewable claim prevents two live frontends from presenting the same
-result. Results are injected into Realtime context and marked delivered only
-after playback finishes. If the user interrupts, is speaking, or another
-response is pending, delivery waits and retries without duplicating context.
-Retries are bounded so one malformed result cannot block later completions.
+result. Voice results are injected into Realtime context and marked delivered
+only after the active client reports `playback.started`. For an audio response,
+model response completion, audio generation, `playback.ended`, and cancellation
+before playback starts do not acknowledge delivery. If the user interrupts, is
+speaking, or another response is pending, delivery waits. A failed attempt
+releases or retries its claim; an expired lease can be claimed by another live
+frontend. Retries are bounded so one malformed result cannot block later
+completions.
+
+Text-only clients have no playback receipt. For them, a successful response
+completion is the delivery acknowledgement; a failed response remains pending.
 
 When the backend Agent calls `session_start` or `session_send`, delegation is
 established only after the Session tool creates or continues the target work
 and returns run and Session identifiers validated by the adapter. It is not
 established by a model-authored field. ACP faithfully carries the tool call,
 tool result, and turn termination; the adapter publishes the validated
-correlation to the TaskManager, which moves the original Task to `delegated`
+correlation to the Work runtime, which moves the original Task to `delegated`
 and releases both the backend Agent serialization lock and the Task scheduler
 lane. Other voice requests can therefore use the coordinator while the target
 Session runs.
@@ -327,23 +443,23 @@ state, never delegation IDs, target Session IDs, directories, or raw events.
 ```text
 WebUI / TUI / Desktop
    ↓ WebSocket and HTTP
-Realtime Gateway
-   ↓ spawn_thinking
-Task queue
-   ↓
-structured BackendPort Task
-   ↓
-Adapter projection: natural instruction + native attachment parts
-   ↓
-OpenCode ACP, OpenClaw ACP bridge, Qoder ACP,
-Qwen Code ACP, Kimi Code ACP, or another ACP Agent
+Python transport and Realtime application
+   ↓ normalized tool call
+FrontendTurnGraph
+   ↓ WorkSubmissionPort
+WorkGraph + Task repository + scheduler
+   ↓ protocol-neutral BackendPort
+Node backend bridge
+   ↓ Adapter projection: natural instruction + native attachment parts
+OpenCode ACP, OpenClaw ACP bridge, Qoder ACP, Qwen Code ACP,
+Kimi Code ACP, or another supported Agent
 ```
 
-Backend-specific API details belong only in `server/src/agent`. Realtime tools
-must not import backend adapters. The UI consumes only public Task events and
-final timeline content. Package-level `shared` modules are foundational runtime
-utilities; server `core` and `process` may depend on them, but they must not
-depend on server layers.
+Backend-specific JavaScript adapter details remain under `server/src/agent`;
+the Python Work Runtime sees only `BackendPort`. Realtime tools must not import
+backend adapters. The UI consumes only public Task events and final timeline
+content. Transport depends on application and domain contracts, while provider
+and backend adapters point inward through ports.
 
 Gateway may serve the immutable `web/dist` artifact as a deployment
 convenience, but this is static hosting only. Gateway source must not import UI
@@ -382,10 +498,13 @@ Realtime, memory, and other backend secrets never cross that boundary. A
 generic ACP command may opt in additional names explicitly through
 `QWEN_AUDIO_AGENT_ACP_FORWARD_ENV`.
 
-The HTTP/WebSocket application is constructed by an injectable composition
-root. Importing the application factory does not bind a port; CLI and Desktop
-use the thin bootstrap entry while tests and future clients may supply isolated
-Agent, task, conversation, configuration, and logging services.
+The Python HTTP/WebSocket application is constructed by an injectable
+composition root. Importing the application factory does not bind a port. The
+CLI performs the concrete wiring, while tests and future hosts may supply
+isolated input arbitration, Task and Conversation sources, identity, health,
+and Realtime event handlers. The Node/Electron bootstrap remains only for
+launch compatibility and process ownership; it does not implement application
+behavior.
 
 The shared adapter usually owns one ACP stdio child and stops it with Gateway.
 OpenCode, Qoder, Qwen Code, and Kimi Code run directly as ACP agents; OpenCode may also
@@ -409,14 +528,15 @@ stdio, and that adapter starts Codex App Server over its own local stdio
 protocol. Codex App Server may expose other transports, but they are not a
 remote ACP endpoint and must not leak into the shared ACP adapter.
 
-Desktop, TUI and WebUI are replaceable Gateway clients. The Gateway is the single
-owner of its active Realtime model and publishes the exact model profile and
-transport capabilities through health. Desktop may configure and restart only
-its locally owned Gateway; WebUI and TUI treat the profile as read-only. Borrowed
-or remote Gateway model mismatches are rejected rather than silently overridden.
-Closing a UI cannot affect queued work or the fixed backend Agent Session.
-Configuration that changes Realtime or backend behavior takes effect on the next
-Gateway start; changing a UI's Gateway URL only reconnects that UI.
+Desktop, TUI and WebUI are replaceable Gateway clients. The Python CLI selects
+the Realtime model from the existing environment contract; clients do not
+override that model per connection. Health publishes the active provider,
+exact model profile, model catalog, input sample rate, configuration signature,
+selectable providers, and backend summary. Desktop may configure and restart
+only its locally owned Gateway. Closing a UI cannot
+affect queued work or the fixed backend Agent Session. Configuration that
+changes Realtime or backend behavior takes effect on the next Gateway start;
+changing a UI's Gateway URL only reconnects that UI.
 
 The macOS desktop renderer is packaged inside the application. Electron serves
 those immutable assets from a private, random loopback path and proxies only
@@ -437,5 +557,5 @@ Before merging a change, verify:
 5. Is completion spoken only from a final backend Agent result?
 6. Did any UI begin managing a Gateway or backend process?
 7. Can interruption postpone speech without cancelling submitted Task?
-8. Do tests cover FIFO serialization, fixed Session reuse, tool animation, and
-   delivery retry?
+8. Do tests cover FIFO serialization, fixed Session reuse, checkpoint and
+   ledger boundaries, tool animation, and playback-start delivery retry?

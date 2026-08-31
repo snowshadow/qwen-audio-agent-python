@@ -18,7 +18,7 @@ import {
 The SDK exports:
 
 - `defineBackendAdapter` for composition-time method validation;
-- `createBackendAgentHost` for embedded Gateway composition;
+- `createBackendAgentHost` for a thin host surface over `BackendPort`;
 - `BackendWorkRuntime` for projecting a Gateway Task into `submit`;
 - `BackendEventType` and `backendEvent` for normalized backend events;
 - `verifyBackendAdapterConformance`, shared with the built-in ACP adapter;
@@ -88,7 +88,7 @@ the `BackendPort` method surface:
 Incremental messages and artifacts use `backend.message` and
 `backend.artifact`. ACP `session/update`, A2A streaming events, and custom
 callbacks must be normalized inside the adapter; raw protocol payloads never
-reach TaskManager or the frontend.
+reach the Work runtime or the frontend.
 
 `kind` is extensible. Common presentation fields include `status`, `message`,
 `label`, `detail`, `category`, `tool`, `title`, `updatedAt`, `mode`, `completed`,
@@ -107,20 +107,23 @@ be inferred from it. Adapters that do not support authorization keep rejecting
 
 ## Gateway composition
 
+v2 no longer exports `qwen-audio-agent/gateway-application`. Validate a custom
+adapter with the SDK, then run it through `BackendWorkRuntime` or the Python
+`BackendPort` path. Built-in `AGENT_PROTOCOL` values still select ACP backends
+and never load arbitrary code dynamically.
+
 ```js
-import { createGatewayApplication } from 'qwen-audio-agent/gateway-application'
-import { createBackendAgentHost } from 'qwen-audio-agent/backend-adapter-sdk'
+import {
+  BackendWorkRuntime,
+  createBackendAgentHost,
+} from 'qwen-audio-agent/backend-adapter-sdk'
 import { MyBackendAdapter } from './my-backend.mjs'
 
-const agent = createBackendAgentHost(new MyBackendAdapter())
-const application = createGatewayApplication({ agent })
-
-process.once('SIGTERM', () => application.close())
+const backend = createBackendAgentHost(new MyBackendAdapter())
+const runtime = new BackendWorkRuntime({ backend })
 ```
 
-This entry is for custom Node launchers. Existing `AGENT_PROTOCOL` values still
-select built-in backends and never load arbitrary code dynamically. A complete
-non-ACP in-memory example lives in
+A complete non-ACP in-memory example lives in
 [`examples/backend-adapter`](../../examples/backend-adapter/README.md).
 
 ## Conformance

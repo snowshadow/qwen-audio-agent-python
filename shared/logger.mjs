@@ -30,6 +30,10 @@ const REDACTED = '[REDACTED]'
 const SENSITIVE_KEY = /(?:api[_-]?key|authorization|cookie|credential|password|secret|token$)/i
 const AUTH_VALUE = /\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi
 const API_KEY_VALUE = /\bsk-[A-Za-z0-9_-]{8,}\b/g
+const ASSIGNED_SECRET_VALUE = /\b((?:api[_-]?key|access[_-]?key|secret(?:[_-]?key)?|token|password|passwd|github_token|aws_access_key_id|aws_secret_access_key))(\s*(?:=|:)\s*["']?)([^\s"',;&]+)/gi
+const CLI_SECRET_VALUE = /(--(?:api[-_]?key|access[-_]?key|secret(?:[-_]?key)?|token|password|passwd)(?:=|\s+))([^\s]+)/gi
+const KNOWN_TOKEN_VALUE = /\b(?:AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{20,})\b/g
+const PRIVATE_KEY_VALUE = /-----BEGIN(?: [A-Z0-9]+)* PRIVATE KEY-----[\s\S]*?-----END(?: [A-Z0-9]+)* PRIVATE KEY-----/g
 const URL_SECRET_VALUE = /([?&](?:api[_-]?key|token|access_token|secret|password)=)[^&\s]+/gi
 const contextStorage = new AsyncLocalStorage()
 
@@ -58,9 +62,13 @@ export function defaultLogDirectory(
 
 function scrubString(value) {
   const scrubbed = String(value)
+    .replace(PRIVATE_KEY_VALUE, REDACTED)
     .replace(AUTH_VALUE, match => `${match.split(/\s/, 1)[0]} ${REDACTED}`)
     .replace(API_KEY_VALUE, REDACTED)
+    .replace(ASSIGNED_SECRET_VALUE, `$1$2${REDACTED}`)
+    .replace(CLI_SECRET_VALUE, `$1${REDACTED}`)
     .replace(URL_SECRET_VALUE, `$1${REDACTED}`)
+    .replace(KNOWN_TOKEN_VALUE, REDACTED)
   return scrubbed.length > MAX_STRING_CHARS
     ? `${scrubbed.slice(0, MAX_STRING_CHARS)}…[truncated]`
     : scrubbed

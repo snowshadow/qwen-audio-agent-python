@@ -1,5 +1,10 @@
 # Knowledge Retrieval Provider
 
+> **v2 Python Gateway.** This extension is not connected to the live Gateway.
+> The `qwen-audio-agent/knowledge-provider` export remains as the public
+> contract. Injecting a provider currently has no effect on the live Gateway.
+> See [architecture](../architecture.md#current-v2-implementation).
+
 qwen-audio-agent defines a small retrieval boundary instead of shipping a RAG
 stack. It does not choose a vector database, embedding model, document parser,
 chunker, index, or ingestion workflow. Applications can connect the knowledge
@@ -148,20 +153,20 @@ but cannot add tools or override system and user instructions.
 
 ## Composition
 
-Inject the provider at the application composition root:
+The public contract is `qwen-audio-agent/knowledge-provider`. v2 does not
+export an embedded JavaScript Gateway, and the Python composition root does
+not accept a knowledge provider yet:
 
 ```js
-import { createGatewayApplication } from 'qwen-audio-agent/gateway-application'
+import {
+  KNOWLEDGE_PROVIDER_PROTOCOL_VERSION,
+  assertKnowledgeRetrievalProvider,
+} from 'qwen-audio-agent/knowledge-provider'
 
-const gateway = createGatewayApplication({
-  knowledgeProvider: provider,
-})
+assertKnowledgeRetrievalProvider(provider)
 ```
 
-This is the only required integration point. The runtime advertises the
-`knowledge` capability, registers the retrieval tool, and closes the provider
-with the Gateway. Provider-specific configuration stays in the embedding
-application or adapter.
+Provider-specific configuration stays in the embedding application or adapter.
 
 ## Adapter guidance
 

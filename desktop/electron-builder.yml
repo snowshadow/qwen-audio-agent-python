@@ -4,7 +4,6 @@ electronVersion: 43.2.0
 asar: true
 npmRebuild: false
 asarUnpack:
-  - node_modules/sherpa-onnx/**/*.wasm
   # open-computer-use is spawned by external backend Agent processes (plain
   # node + native runtimes), which cannot read files inside the asar archive.
   - node_modules/@qwen-code/open-computer-use/**/*
@@ -34,6 +33,23 @@ files:
   - THIRD_PARTY_NOTICES.md
 
 extraResources:
+  # The Python Gateway runs outside app.asar. Keep its locked project and
+  # importable sources together under Resources/runtime so uv (or an explicit
+  # Python interpreter) can launch the same core in packaged builds.
+  - from: src/qwen_audio_agent
+    to: runtime/src/qwen_audio_agent
+    filter:
+      - "**/*"
+      - "!**/__pycache__/**"
+      - "!**/*.pyc"
+  - from: pyproject.toml
+    to: runtime/pyproject.toml
+  - from: uv.lock
+    to: runtime/uv.lock
+  # pyproject.toml references README.md as project metadata, so uv needs it
+  # when materialising the packaged project.
+  - from: README.md
+    to: runtime/README.md
   - from: scripts
     to: runtime/scripts
     filter:

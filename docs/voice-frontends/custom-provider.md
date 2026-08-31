@@ -1,9 +1,14 @@
 # Extending Realtime Providers
 
-A product host can inject a custom Realtime Provider without changing the Gateway voice session or backend Agent logic.
+A product host can define a custom Realtime Provider without changing Gateway
+voice-session or backend Agent logic.
+
+v2 no longer exports `qwen-audio-agent/gateway-application`. The JavaScript
+registry below still validates adapter shape. The live Python Gateway does not
+load it; connecting a custom provider to the running path requires a Python
+`RealtimeProviderPort`.
 
 ```js
-import { createGatewayApplication } from 'qwen-audio-agent/gateway-application'
 import {
   createRealtimeProviderRegistry,
 } from 'qwen-audio-agent/realtime-provider'
@@ -14,10 +19,7 @@ const realtimeProviderRegistry = createRealtimeProviderRegistry({
   defaultProvider: privateRealtimeProvider.key,
 })
 
-createGatewayApplication({
-  realtimeProviderRegistry,
-  realtimeProvider: privateRealtimeProvider.key,
-})
+realtimeProviderRegistry.list()
 ```
 
 The extension boundary is:

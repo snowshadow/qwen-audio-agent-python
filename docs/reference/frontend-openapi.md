@@ -1,5 +1,10 @@
 # Frontend OpenAPI tool adapter
 
+> **v2 Python Gateway.** This extension is not connected to the live Gateway.
+> The previous JavaScript runtime was removed. The configuration keys below have
+> no effect until a Python port lands.
+> See [architecture](../architecture.md#current-v2-implementation).
+
 The frontend OpenAPI adapter connects selected REST operations to the chatbot
 without coupling them to a realtime provider or a backend Agent. It uses the
 same dynamic tool source, execution limits, and per-operation approval path as

@@ -221,6 +221,12 @@ QWEN_AUDIO_WEB_SEARCH_MCP_TOOL=web_search
 
 Set `QWEN_AUDIO_WEB_SEARCH_PROVIDER=none` to disable frontend web search.
 
+Frontend web search, the MCP client, the OpenAPI adapter, Frontend Profile
+tool sources, and local wake-word detection are **not connected** on the v2
+Python Gateway. The keys below remain documented for the later port and
+currently have no effect. See
+[architecture](architecture.md#current-v2-implementation).
+
 General chatbot tools can be connected through the frontend MCP client. Set
 `QWEN_AUDIO_FRONTEND_MCP_CONFIG` to its versioned JSON file; tools must be
 enabled individually and writable operations require confirmation. See

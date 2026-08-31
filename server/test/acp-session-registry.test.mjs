@@ -52,6 +52,29 @@ test('preserves legacy coordinator records while persisting project directories'
   }
 })
 
+test('persists explicit owners and rejects cross-owner registry reads', () => {
+  const registry = new AcpSessionRegistry()
+  registry.set('qoder:owner-one:backend', {
+    sessionId: 'coordinator-one',
+    cwd: '/coordinator',
+  }, { ownerId: 'owner-one' })
+  registry.setProject('qoder:owner-one:project:session-one', {
+    sessionId: 'session-one',
+    cwd: '/project',
+    title: 'Project',
+  }, { ownerId: 'owner-one' })
+
+  assert.equal(registry.get('qoder:owner-one:backend', {
+    ownerId: 'owner-one',
+  }).ownerId, 'owner-one')
+  assert.equal(registry.get('qoder:owner-one:backend', {
+    ownerId: 'owner-two',
+  }), null)
+  assert.equal(registry.getProject('qoder:owner-one:project:session-one', {
+    ownerId: 'owner-two',
+  }), null)
+})
+
 test('persists bounded cancellation reconciliation until it is acknowledged', () => {
   const directory = mkdtempSync(join(tmpdir(), 'qwaudio-acp-reconcile-'))
   const filePath = join(directory, 'acp-sessions.json')

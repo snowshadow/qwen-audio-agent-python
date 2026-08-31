@@ -1,5 +1,10 @@
 # Frontend MCP client
 
+> **v2 Python Gateway.** This extension is not connected to the live Gateway.
+> The previous JavaScript runtime was removed. The configuration keys below have
+> no effect until a Python port lands.
+> See [architecture](../architecture.md#current-v2-implementation).
+
 The frontend MCP client is the standards-based extension boundary for adding
 chatbot tools without coupling them to a realtime provider or a backend Agent.
 It is separate from the dedicated Web Search provider: Web Search keeps its

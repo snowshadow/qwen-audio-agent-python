@@ -3,9 +3,96 @@
 本文档定义产品边界。违反这些不变性的变更属于架构变更，而非局部功能开发。
 
 前台 Realtime Voice Chatbot、异步 Task Bridge 与单一用户后台 Agent 的目标边界及
-分阶段重构计划见
+迁移记录见
 [Realtime Voice Chatbot Runtime Roadmap](https://github.com/QwenAudio/qwen-audio-agent/blob/main/docs/roadmap/frontend-chatbot-runtime.zh.md)。
-在 Roadmap 分阶段落地期间，本文继续描述当前已实现并受测试保护的运行时行为。
+本文与测试共同描述当前运行时行为。
+
+## 当前 v2 实现
+
+Gateway 运行时位于 `src/qwen_audio_agent/`，使用 Python 实现。
+LangGraph 只负责两个有界状态机，不是整个产品的状态容器。v2 公开基线是这套混合架构：
+Python Gateway 的图与运行时、Node ACP 适配器、现有 Desktop/Web/TUI 宿主。
+它不是 LangGraph Platform 应用，也不把这两张图作为独立库发布。
+不要把 ACP 适配器改写成 Python 来「补完」迁移。
+
+```text
+Desktop / WebUI / TUI
+          │ HTTP、WebSocket、播放回执
+          ▼
+Python Transport + Realtime Application ◄──► Realtime Provider
+          │ 归一化工具调用
+          ▼
+FrontendTurnGraph
+├── inline / control 结果返回当前轮次
+└── spawn_thinking ──► 受理回执 ──► WorkGraph
+                                         │ BackendPort
+                                         ▼
+                                     已配置后台
+                                         │ 最终 Work 结果
+                                         ▼
+                             ResultDeliveryCoordinator
+                             安全窗口 ──► 语音：playback.started
+                                         纯文本：响应成功完成
+                                         │
+                                         ▼
+                                  Task 交付状态持久化
+```
+
+`FrontendTurnGraph` 的作用域是一个实时对话轮次。它校验并去重工具调用，
+执行能力、次数、时间和结果大小限制，路由 inline、control 与 background 工具。
+它的扩展契约支持在副作用前 checkpoint 并等待授权，但当前公开工具目录没有启用该路径。
+它不管理音频、模型响应、后台选择或 Work 执行。
+
+`WorkGraph` 的作用域是一个 Task。owner 调度器、长耗时后台操作和 Adapter
+连接留在图外。归一化后台事件恢复图执行；图将事件归并为有界状态，并在
+下一次等待前 checkpoint。Task Repository 再由该状态更新并发布公开投影。
+
+各类状态只有一个负责方：
+
+| 状态 | 持久化负责方 | 含义 |
+| --- | --- | --- |
+| Frontend 与 Work 执行 | LangGraph SQLite Checkpointer，每个轮次或 Task 一个 thread | 有界控制流快照，用于安全恢复图执行 |
+| 少量跨 thread 索引 | LangGraph SQLite Store | 前台待授权索引等运行时查找数据 |
+| Task 生命周期、结果与通知租约 | JSON Task Repository | 产品账本与交付事实源 |
+| 对话记录 | Conversation Store | 近期用户/助手时间线，不是图状态 |
+| 后台原生 Session | Backend Adapter | 后台私有连续性与恢复依据 |
+
+checkpoint 不能证明外部副作用已发生、后台 Session 仍存在，或音频已到达客户端。
+这些事实仍由各自的 Repository、Adapter 或播放回执负责。
+
+现有 Node 与 Electron Host 使用的 Gateway 启动入口是兼容薄壳，进程链为：
+
+```text
+Node / Electron Host → python-gateway-entry.mjs → Python Gateway
+Python Work Runtime → NodeBackendBridge → python-backend-bridge.mjs
+                    → 现有 JavaScript 后台 Adapter
+```
+
+该入口启动 `python -m qwen_audio_agent.cli`，并转发结构化就绪消息、信号与退出状态。
+CLI、TUI、Desktop UI/进程代码与保留的后台 Adapter 仍承担实际 JavaScript 职责；
+当前运行链路不在 JavaScript 内维护第二套 Gateway 或 Task 状态机。
+
+公开 `qwenaudio` 与桌面版配置流程保持不变。薄壳将已有环境变量契约传给
+Python CLI，包括 `HOST`、`PORT`、Realtime 设置与 `AGENT_PROTOCOL`。
+`QWAUDIO_DATA_DIR` 保存共享身份、画像、记忆、配置和清单；
+`QWAUDIO_CONFIG_DIR` 保存 Gateway 租约、Task 账本、对话、checkpoint 和皮肤等
+运行时状态。未设置数据目录时，它回退到配置目录。启动器优先使用
+`QWEN_AUDIO_AGENT_PYTHON`，其次使用工程虚拟环境，否则使用锁定的 `uv` 工程。
+Python 源码开发可直接运行 `uv run python -m qwen_audio_agent.cli`。v2 Desktop 包携带
+锁定工程，但不内置 Python 解释器或 `uv`；主机必须提供 `uv`，或让
+`QWEN_AUDIO_AGENT_PYTHON` 指向已安装运行依赖的环境。
+
+当前生效的能力是第 3 节的内置实时工具目录，以及 ACP 后台桥。下列文档中的扩展点
+**尚未接入** Python Gateway。旧版 JavaScript Gateway 运行时已移除；公开合同模块
+仍保留，供后续移植。相关配置项在完成移植前不会生效：
+
+- 前台 MCP Client（`QWEN_AUDIO_FRONTEND_MCP_CONFIG`）
+- 前台 OpenAPI Adapter（`QWEN_AUDIO_FRONTEND_OPENAPI_CONFIG`）
+- Frontend Profile 工具源（`QWEN_AUDIO_FRONTEND_PROFILE`）
+- 知识检索 Provider
+- 前台联网搜索（`QWEN_AUDIO_WEB_SEARCH_PROVIDER`）
+- 会话结束自动记忆整理
+- 本地唤醒词（`QWEN_AUDIO_WAKE_WORD_ENABLED`）
 
 ## 1. 用户可见模型
 
@@ -14,16 +101,17 @@
 1. **实时前端** — 全双工语音、简单直接回答，以及基本的本地时间/记忆工具。
 2. **后端 Agent** — 一个用户配置的办事 Agent，负责处理需要工具、文件、应用程序、代码、设备控制或多步执行的请求。
 
-后端可以是 OpenCode、OpenClaw、Qoder、Qwen Code、Kimi Code、Pi 等 ACP Agent，
-也可以是远程 A2A Agent 或自定义 BackendPort Adapter。
-它内部可以使用工具、技能、Agent 或其他 Session。这些都是后端私有实现细节，
-不会创建额外的 qwen-audio-agent 层。ACP、A2A 或自定义协议细节只存在于各自
-BackendPort Adapter 内；后端特定的启动和能力行为位于已注册的驱动程序中。
+公开 Python CLI 当前注册了保留的 ACP Driver，包括 OpenCode、OpenClaw、
+Qoder、Qwen Code、Kimi Code 和 Pi。BackendPort SDK 也导出 A2A Adapter，
+可用于自定义组合根，但公开 CLI 不选择它。后端内部可以使用工具、技能、
+Agent 或其他 Session。这些都是后端私有实现细节，不会创建额外的
+qwen-audio-agent 层。协议细节只存在于各自 Adapter 内；后端特定的启动和能力行为
+位于已注册的 Driver 中。
 
 ## 2. 非阻塞请求流
 
 ```text
-final ASR
+final ASR → FrontendTurnGraph
    │
    ├─ immediately answerable ───────────────► Realtime speech
    │
@@ -33,7 +121,7 @@ final ASR
       Task accepted
           │ response returns to Realtime immediately
           ▼
-      owner FIFO queue
+      WorkGraph owner FIFO queue
           │
           ▼
       configured BackendPort
@@ -46,11 +134,12 @@ final ASR
 ```
 
 `spawn_thinking` 永不等待所请求的工作完成。用户可以在多个 Task 项排队期间继续
-说话。对于每个 owner，一次只有一个 Task 项被发送到配置的 BackendPort。
+说话。Coordinator Submission 按 owner 使用 FIFO Lane。Task 进入已验证的委派后即释放
+该 Lane，因此委派的目标工作不会阻塞下一个 Coordinator Submission。
 
 ## 3. 实时边界
 
-实时前端有意保持极小的工具集——工具少、延迟低、无多步编排。基础工具为：
+实时前端有意保持极小的工具集——工具少、延迟低、无多步编排。内置工具上限为：
 
 ```text
 spawn_thinking
@@ -61,11 +150,15 @@ get_current_time
 memory
 notes
 respond_agent_permission
+enter_sleep
 ```
+
+`spawn_thinking` 仅在已配置后台时暴露。`enter_sleep` 仅在连接客户端声明
+`sleeping` 状态时暴露。
 
 `memory` 通过一个扁平接口维护两份普通 Markdown 文档。每次调用只执行一个
 原子操作：`read`、`append` 或 `replace`；`replace` 使用唯一匹配的原文定位，
-找不到或匹配多处时安全失败。同一轮可逐项调用多次，Gateway 合并后续回应。
+找不到或匹配多处时安全失败。每次调用都将自己的结果回传给 Realtime 模型。
 两个文档的权限边界不同：
 
 - `user` 是当前用户的长期个性化覆盖：称呼、关系、助手在其面前的名称、语言、表达
@@ -79,17 +172,12 @@ respond_agent_permission
 身份、人格、关系定位和表达风格。首次启动从随包模板创建，升级不覆盖，下一次语音会话
 读取修改。助手不会通过记忆工具修改它。
 
-除显式工具写入外，会话结束提取器还会整理遗漏的明确用户指令和持久事实，分别路由到
-`USER.md` 与 `MEMORY.md`。它与 Realtime 工具共用同一个上下文服务，不直接写文件，
-永远不能修改 `ASSISTANT.md`，并会拦截文档边界错误和敏感内容。补丁结果记录在本地审计
-文件中；未配置文本模型 API 密钥时自动静默禁用。
-
-`notes` 将用户命名的列表（购物清单、待办事项、阅读列表）作为前端自有的易失集合
+`notes` 将用户命名的列表（购物清单、待办事项、阅读列表）作为前端自有的本地持久化集合
 进行管理：单次调用即可完成添加、展示、匹配移除、清空和删除，无需后端参与。列表是
-条目数据，而非记忆；稳定事实保留在 `memory` 中，列表条目绝不会被写入用户偏好或
+条目数据，而非记忆；稳定事实保留在 `memory` 中，列表条目不会被写入用户偏好或
 事实记忆。条目和列表解析首先匹配精确文本，然后匹配唯一的不区分大小写子串，
-否则报告歧义并将候选名称返回给模型以澄清。`clear` 和 `drop` 额外要求当前轮次
-用户明确表达破坏性意图。
+否则报告歧义并将候选名称返回给模型以澄清。工具契约要求模型只在当前轮次
+用户明确提出破坏性请求后调用 `clear` 和 `drop`；数据 Store 不再加第二道确认。
 
 `get_agent_task_status` 是生命周期、进度和中间结果问题的唯一实时入口。
 Gateway 直接读取自身持有的 Task 记录，包括 Adapter 归一化后的最新消息、活动和
@@ -106,9 +194,10 @@ Gateway 直接读取自身持有的 Task 记录，包括 Adapter 归一化后的
 它只能转发由 Gateway 提供的、针对待处理的、owner 作用域权限请求的明确当前轮次
 用户决策。它可以理解自然的肯定或否定措辞，如"可以"或"不允许"，但不能在没有
 当前轮次用户话语的情况下虚构同意、创建请求、选择工具或修改后端权限策略。
-回复仅限于 `always` 和 `reject`；`always` 使用 Gateway 当前前端会话的策略。
-Adapter 仍选择最窄的单次后端权限选项，
-后续请求由 Gateway 在同一前端会话内自动允许，不会创建持久的后端授权规则。
+回复仅限于 `always` 和 `reject`，并只处理当前待决请求。`always` 只是为兼容现有
+接口保留的批准字段值，不会形成会话授权。批准只映射到后端 `allow_once`；如果后端
+没有提供单次允许选项，请求会被取消，不会静默扩大为 `allow_always`。拒绝优先选择
+`reject_once`，必要时可用 `reject_always` 扩大拒绝范围。后续权限请求始终重新询问。
 
 传递给 `spawn_thinking` 的 `objective` 是对用户请求的保守解释，而非执行计划。
 提交前必须结合当前对话把"继续那个页面"之类的指代解析成一条自包含指令。该指令就是
@@ -116,18 +205,19 @@ Adapter 仍选择最窄的单次后端权限选项，
 不接收前台人格、长期记忆或最近聊天历史；与执行有关的事实必须先解析进指令，而不是
 转发这些文档。
 
-当前轮附件由 Gateway 自动作为协议原生 Part 随任务传递，而不是放入模型可见的 JSON
-清单。只有任务明确依赖此前轮次的图片或文件时，前台才通过可选的 `input_refs` 引用
-Gateway 分配的会话内输入 ID。Task ID、owner、生命周期、时间戳和路由继续作为
-Gateway/BackendPort 的结构化数据，不进入后台 Agent 的任务指令。工作目录和用户
-时区也不重复拼入每轮文本；协议或后台自身的运行上下文负责这些信息。
+Bridge 将 Task 的 `inputParts` 作为协议原生 Part 传给后台 Agent，而不是
+JSON 清单。`inputRefs` 仅保留为内部兼容字段；当前公开工具不会填写它，也不会用它
+解析更早对话轮次的附件。Task ID、owner、生命周期、时间戳和路由继续作为
+Gateway/BackendPort 的结构化数据，不进入后台 Agent 的任务指令。工作目录和用户时区也不
+重复拼入每轮文本；协议或后台自身的运行上下文负责这些信息。
 
 ## 4. 固定后端 Agent Session
 
-ACP 适配器为每个 owner 和后端拥有一个持久协调器 Session 身份：
+ACP Adapter 为每组 protocol 与 owner 拥有一个持久协调器 Session 身份。
+确切存储键是 Adapter 私有细节，由下列组合派生：
 
 ```text
-qwen-audio-agent:<owner>:backend
+<protocol> × <owner>
 ```
 
 Gateway 在该稳定键之后存储原生 ACP Session ID，并在后续轮次调用
@@ -149,6 +239,7 @@ Agent 如何使用后端特定能力。
 qwen-audio-agent Task 记录是交付回执，而非后端内部任务图的镜像。
 
 ```text
+scheduled ──► queued
 queued → running ─────────────────────────→ completed
    │        └→ delegated → finalizing ────────┘
    └────────────→ cancelling → cancelled
@@ -163,8 +254,10 @@ UI 将 `queued` 和 `running` 呈现为相同的"处理中"状态。队列位置
 不会改变用户的双工对话。
 
 排队中和直接执行中的 Task 在 Gateway 重启后无法安全恢复，因此会变为 failed 并附带
-明确的重启原因。委派 Task 只有在 Adapter 能确认持久化原生 Session 时才会重新挂接。
-已完成的结果和通知交付状态会被持久化。
+明确的重启原因。委派 Task 只有在 Adapter 能确认持久化原生 Session，且存在对应
+WorkGraph checkpoint 时才会重新挂接。私有恢复关联会被持久化，但不进入公开 Task 投影。
+已完成的结果和通知交付状态会被持久化。定时 Work 从 Task 账本重新设置，不从
+Graph checkpoint 推断。
 
 ## 6. 进度动画
 
@@ -193,15 +286,19 @@ Agent 请求次数耗尽分别进入 Gateway 的取消或失败路径。Gateway 
 决定对话展示、资源卡片和语音表达。
 
 已完成的结果优先返回到发起对话。在全新连接时，可以恢复同一 owner 的旧对话中
-未完成的结果。可续期声明防止两个实时前端呈现相同结果。结果被注入实时上下文，
-仅在播放完成后标记为已交付。如果用户打断、正在说话或有其他响应待处理，
-交付会等待并重试，不会重复注入上下文。重试有次数上限，因此一个格式异常的结果
-不会阻塞后续完成。
+未完成的结果。可续期声明防止两个实时前端呈现相同结果。语音结果被注入实时上下文，
+仅在当前客户端上报 `playback.started` 后标记为已交付。对有音频的响应，模型响应完成、
+音频生成、`playback.ended` 和播放开始前的取消都不会确认交付。如果用户打断、正在说话
+或有其他响应待处理，交付会等待。失败的尝试会释放声明或重试；过期租约可由其他在线前端
+重新领取。重试有次数上限，因此一个格式异常的结果不会阻塞后续完成。
+
+纯文本客户端没有播放回执。对它们而言，响应成功完成即表示交付确认；
+响应失败时仍保持待交付。
 
 当后端 Agent 调用 `session_start` 或 `session_send` 时，委派成立的权威事实是
 Session 工具已经成功创建或续接目标任务，并返回 Adapter 验证过的运行与 Session
 标识，而不是模型输出的某个字段。ACP 只负责如实传递工具调用、工具结果和当前回合的
-终止；Adapter 将验证后的关联发布给 TaskManager，后者据此把原始 Task 移至
+终止；Adapter 将验证后的关联发布给 Work 运行时，后者据此把原始 Task 移至
 `delegated`，并释放后端 Agent 串行化锁和 Task 调度通道。因此，其他语音请求可以在
 目标 Session 运行期间使用协调器。
 
@@ -225,7 +322,7 @@ ACP Agent 轮次不设人为墙钟超时。初始协调轮次、委派目标轮�
 关联的目标 Session 发送 `session/cancel`。Task 保持 `cancelling` 状态，
 直到其中一条路径确认停止，然后变为 `cancelled`。停止失败则变为 `failed` 并
 附带取消错误。在适配器直接中止后，Gateway 会记录一个取消事实，并在下一个安全的
-协调器轮次中注入一次。这样可以在不延迟取消或重复停止的情况下协调协调器的历史。
+协调器轮次中注入一次。这样可以在不延迟取消或重复停止的情况下协调器的历史。
 
 前台的受理确认来自 Gateway 已经创建的 Task，而不是协调 Agent 自报的委派状态。
 协调轮次仍依 ACP 生命周期信号自然结束；Gateway 不会根据受理文本或 Session
@@ -259,21 +356,22 @@ MCP。项目 Session 不会连接协调 MCP Server。
 ```text
 WebUI / TUI / Desktop
    ↓ WebSocket and HTTP
-Realtime Gateway
-   ↓ spawn_thinking
-Task queue
-   ↓
-结构化 BackendPort Task
-   ↓
-Adapter 投影：自然任务指令 + 原生附件 Part
-   ↓
-OpenCode ACP, OpenClaw ACP bridge, Qoder ACP,
-Qwen Code ACP, Kimi Code ACP, or another ACP Agent
+Python Transport + Realtime Application
+   ↓ 归一化工具调用
+FrontendTurnGraph
+   ↓ WorkSubmissionPort
+WorkGraph + Task Repository + Scheduler
+   ↓ 与协议无关的 BackendPort
+Node Backend Bridge
+   ↓ Adapter 投影：自然任务指令 + 原生附件 Part
+OpenCode ACP, OpenClaw ACP bridge, Qoder ACP, Qwen Code ACP,
+Kimi Code ACP, or another supported Agent
 ```
 
-后端特定的 API 细节仅属于 `server/src/agent`。实时工具不得导入后端适配器。
-UI 仅消费公共 Task 事件和最终时间线内容。包级别的 `shared` 模块是基础运行时
-工具；server `core` 和 `process` 可以依赖它们，但它们不得依赖 server 层。
+后台特定的 JavaScript Adapter 细节保留在 `server/src/agent`；Python Work Runtime
+只能看到 `BackendPort`。Realtime 工具不得导入后台 Adapter。UI 仅消费公开 Task
+事件和最终时间线内容。Transport 依赖 Application 与 Domain 契约，Provider 与后台
+Adapter 则通过 Port 指向内部。
 
 Gateway 可以将不可变的 `web/dist` 产物作为部署便利来提供，但这仅是静态托管。
 Gateway 源码不得导入 UI 组件、呈现文本、样式、终端行为或桌面行为。
@@ -300,9 +398,10 @@ Session 生命周期代码。声明外部后台服务，并不意味着 ACP 连�
 后台的密钥不会跨过该边界。通用 ACP 命令如确有需要，可通过
 `QWEN_AUDIO_AGENT_ACP_FORWARD_ENV` 显式列出额外变量名。
 
-HTTP/WebSocket 应用由可注入的组合根构造。导入应用工厂不会监听端口；CLI 和桌面版
-使用轻量 bootstrap，而测试及未来客户端可以注入彼此隔离的 Agent、任务、会话、
-配置和日志服务。
+Python HTTP/WebSocket 应用由可注入的组合根构造。导入应用工厂不会监听端口；
+CLI 负责实际组装，测试及未来 Host 可以注入彼此隔离的 Input Arbitration、
+Task 与 Conversation Source、Identity、Health 和 Realtime Event Handler。
+Node/Electron bootstrap 只保留启动兼容与进程所有权，不实现应用行为。
 
 共享适配器通常拥有一个 ACP stdio 子进程，并随 Gateway 一起停止。OpenCode、Qoder、
 Qwen Code 和 Kimi Code 直接作为 ACP Agent 运行；OpenCode 还可以额外启动其原生本地 Session
@@ -320,12 +419,12 @@ Codex 也遵循同一边界：qwen-audio-agent 通过 ACP stdio 启动 `codex-ac
 通过自己的本地 stdio 协议启动 Codex App Server。Codex App Server 可以提供其他传输，
 但它们不是远程 ACP 端点，不应泄漏进共享 ACP 适配层。
 
-Desktop、TUI 和 WebUI 是可替换的 Gateway 客户端。Gateway 是当前 Realtime 模型的
-唯一所有者，并通过 health 发布精确模型档案与传输能力。Desktop 只能配置和重启其
-本地自有 Gateway；WebUI 与 TUI 将档案视为只读。借用或远程 Gateway 的模型不一致
-会被拒绝，而不会被静默覆盖。关闭 UI 不会影响排队中的工作或固定的后端 Agent
-Session。更改实时或后端行为的配置在下次 Gateway 启动时生效；更改 UI 的 Gateway
-URL 仅重新连接该 UI。
+Desktop、TUI 和 WebUI 是可替换的 Gateway 客户端。Python CLI 从现有环境变量
+契约选择 Realtime 模型；客户端不按连接覆盖该模型。health 发布当前 Provider、
+精确模型档案、模型目录、输入采样率、配置签名、可选 Provider 与后台摘要。
+Desktop 只能配置和重启其本地自有 Gateway。
+关闭 UI 不会影响排队中的工作或固定的后台 Agent Session。更改实时或后端行为的配置
+在下次 Gateway 启动时生效；更改 UI 的 Gateway URL 仅重新连接该 UI。
 
 macOS 桌面渲染器打包在应用程序内部。Electron 从私有的随机回环路径提供这些
 不可变资源，并仅代理 Gateway HTTP API 和 Realtime WebSocket 流量。桌面 UI
@@ -343,4 +442,5 @@ macOS 桌面渲染器打包在应用程序内部。Electron 从私有的随机�
 5. 完成播报是否仅来自最终后端 Agent 结果？
 6. 任何 UI 是否开始管理 Gateway 或后端进程？
 7. 打断是否能在不取消已提交 Task 的情况下推迟语音？
-8. 测试是否覆盖 FIFO 串行化、固定 Session 复用、工具动画和交付重试？
+8. 测试是否覆盖 FIFO 串行化、固定 Session 复用、checkpoint 与账本边界、
+   工具动画和播放开始确认的交付重试？

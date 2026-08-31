@@ -1,5 +1,9 @@
 # 前台 MCP Client
 
+> **v2 Python Gateway。** 当前 Gateway 尚未接入该扩展。旧版 JavaScript 运行时已移除。
+> 在完成 Python 移植前，下列配置项不会生效。
+> 见[架构文档](../architecture.zh.md#当前-v2-实现)。
+
 前台 MCP Client 是 Chatbot 工具的标准化扩展边界：它不绑定具体
 Realtime Provider，也不绑定后台 Agent。它与专用 Web Search Provider
 相互独立；Web Search 保留一个简单内置兜底，通用 MCP Server 由用户配置。

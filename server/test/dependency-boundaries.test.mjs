@@ -8,38 +8,14 @@ const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../src')
 const projectRoot = resolve(sourceRoot, '../..')
 const sharedRoot = resolve(sourceRoot, '../../shared')
 const allowedDependencies = {
-  app: new Set([
-    'agent',
-    'app',
-    'backend',
-    'conversation',
-    'core',
-    'frontend',
-    'providers',
-    'session',
-    'task',
-    'transport',
-    'voice',
-  ]),
   process: new Set(['process', 'shared']),
   core: new Set(['core', 'shared']),
   frontend: new Set(['frontend']),
-  providers: new Set(['core', 'frontend', 'providers', 'shared']),
   agent: new Set(['agent', 'backend', 'core', 'shared']),
   backend: new Set(['backend', 'core', 'shared']),
   conversation: new Set(['conversation', 'core', 'shared']),
   session: new Set(['session', 'shared']),
-  task: new Set(['agent', 'core', 'session', 'task']),
-  transport: new Set(['shared', 'task', 'transport']),
-  voice: new Set([
-    'conversation',
-    'core',
-    'frontend',
-    'shared',
-    'task',
-    'transport',
-    'voice',
-  ]),
+  voice: new Set(['core', 'shared', 'voice']),
 }
 
 function sourceFiles(directory) {
@@ -70,7 +46,7 @@ test('server source dependencies follow the documented layer direction', () => {
       const targetLayer = layerFor(target)
       if (
         sourceLayer === 'root'
-          ? !new Set(['app', 'process', 'shared']).has(targetLayer)
+          ? !new Set(['process', 'shared']).has(targetLayer)
           : !allowedDependencies[sourceLayer]?.has(targetLayer)
       ) {
         violations.push(
@@ -100,9 +76,6 @@ test('generic ACP and process cores do not bind to named backends', () => {
 test('Gateway Work consumers use BackendPort instead of ACP coordinator APIs', () => {
   const consumers = [
     resolve(sourceRoot, 'backend/backend-work-runtime.mjs'),
-    resolve(sourceRoot, 'app/gateway-application.mjs'),
-    resolve(sourceRoot, 'voice/realtime-gateway.mjs'),
-    resolve(sourceRoot, 'voice/tools/tool-call-handler.mjs'),
   ]
   const privateAcpApi = /\b(?:runCoordinator|cancelWork|queryDelegatedWork|coordinatorUsesMcpInstructions)\b|from\s+['"][^'"]*acp-/
   const violations = consumers

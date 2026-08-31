@@ -1,10 +1,12 @@
 # 安装
 
-需要 Node.js 22.22.2+ 或 24.15.0+、npm 10+。使用默认的 DashScope
+需要 Node.js 22.22.2+ 或 24.15.0+、npm 10+、Python 3.12–3.14 和
+[uv](https://docs.astral.sh/uv/)。首次启动 Gateway 时，程序会通过
+`uv run --frozen --no-dev` 准备锁定的 Python 运行环境。使用默认的 DashScope
 实时语音前台时，还需要 DashScope API Key。
 仓库提供 `.nvmrc` 和 `.node-version`；使用 nvm 时可直接运行 `nvm use`。
 
-## 一键安装
+## 从 npm 安装
 
 推荐从 npm 安装：
 
@@ -23,6 +25,7 @@ npm install -g git+https://github.com/QwenAudio/qwen-audio-agent.git
 ```bash
 git clone https://github.com/QwenAudio/qwen-audio-agent.git
 cd qwen-audio-agent
+uv sync --frozen
 npm install
 npm run install:global
 ```

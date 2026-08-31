@@ -18,6 +18,7 @@ test('Chinese locales keep the original strings byte-identical', () => {
   for (const lang of ['zh', 'zh-CN', 'zh-Hans-CN', 'zh-TW']) {
     withLang(lang, () => {
       assert.equal(t('待命'), '待命')
+      assert.equal(t('允许这一次'), '允许这一次')
       assert.equal(t('请求失败（{status}）', { status: 500 }), '请求失败（500）')
       assert.equal(
         t('等待{holder}释放语音', { holder: '桌面端' }),
@@ -30,6 +31,7 @@ test('Chinese locales keep the original strings byte-identical', () => {
 test('non-Chinese locales get English', () => {
   withLang('en-US', () => {
     assert.equal(t('待命'), 'Standby')
+    assert.equal(t('允许这一次'), 'Allow this time')
     assert.equal(t('开启语音'), 'Enable voice')
     assert.equal(t('请求失败（{status}）', { status: 500 }), 'Request failed (500)')
     assert.equal(

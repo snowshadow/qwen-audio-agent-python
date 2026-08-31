@@ -1,10 +1,12 @@
 # Installation
 
-Requires Node.js 22.22.2+ or 24.15.0+ and npm 10+. When using the default DashScope
+Requires Node.js 22.22.2+ or 24.15.0+, npm 10+, Python 3.12–3.14, and
+[uv](https://docs.astral.sh/uv/). The first Gateway launch prepares the locked
+Python runtime with `uv run --frozen --no-dev`. When using the default DashScope
 real-time voice frontend, a DashScope API Key is also required.
 The repository provides `.nvmrc` and `.node-version`; when using nvm, you can simply run `nvm use`.
 
-## One-line Install
+## Install from npm
 
 Install from npm (recommended):
 
@@ -23,6 +25,7 @@ npm install -g git+https://github.com/QwenAudio/qwen-audio-agent.git
 ```bash
 git clone https://github.com/QwenAudio/qwen-audio-agent.git
 cd qwen-audio-agent
+uv sync --frozen
 npm install
 npm run install:global
 ```

@@ -4,8 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import {
+  assertPythonVersionsAligned,
   isValidVersion,
   nextVersion,
+  toPep440,
   updateVersions,
 } from '../scripts/set-version.mjs'
 
@@ -47,6 +49,13 @@ function fixture() {
       '[![npm](https://img.shields.io/badge/npm-v0.5.0-orange)](https://npmjs.com)\n',
     )
   }
+  writeFileSync(join(root, 'pyproject.toml'), 'version = "0.5.0"\n')
+  mkdirSync(join(root, 'src/qwen_audio_agent'), { recursive: true })
+  writeFileSync(join(root, 'src/qwen_audio_agent/__init__.py'), '__version__ = "0.5.0"\n')
+  writeFileSync(
+    join(root, 'uv.lock'),
+    'name = "qwen-audio-agent-python"\nversion = "0.5.0"\n',
+  )
   return root
 }
 
@@ -63,6 +72,13 @@ test('increments semantic versions from the root version', () => {
   assert.equal(nextVersion('0.5.0', 'major'), '1.0.0')
   assert.equal(nextVersion('0.5.0', '0.6.0-beta.1'), '0.6.0-beta.1')
   assert.throws(() => nextVersion('0.5.0', 'latest'), /完整版本号/)
+})
+
+test('maps npm prerelease versions onto PEP 440', () => {
+  assert.equal(toPep440('1.11.0'), '1.11.0')
+  assert.equal(toPep440('2.0.0-alpha.0'), '2.0.0a0')
+  assert.equal(toPep440('0.6.0-beta.1'), '0.6.0b1')
+  assert.equal(toPep440('2.0.0-rc.2'), '2.0.0rc2')
 })
 
 test('updates every manifest and package-lock workspace together', () => {
@@ -92,4 +108,23 @@ test('updates every manifest and package-lock workspace together', () => {
       /img\.shields\.io\/badge\/npm-v0\.6\.0-orange/,
     )
   }
+  assert.match(readFileSync(join(root, 'pyproject.toml'), 'utf8'), /^version = "0\.6\.0"$/m)
+  assert.match(
+    readFileSync(join(root, 'src/qwen_audio_agent/__init__.py'), 'utf8'),
+    /^__version__ = "0\.6\.0"$/m,
+  )
+  assert.match(
+    readFileSync(join(root, 'uv.lock'), 'utf8'),
+    /name = "qwen-audio-agent-python"\nversion = "0\.6\.0"/,
+  )
+})
+
+test('keeps Python versions aligned after an alpha npm bump', () => {
+  const root = fixture()
+  updateVersions(root, '2.0.0-alpha.0')
+  assert.equal(
+    readFileSync(join(root, 'pyproject.toml'), 'utf8').trim(),
+    'version = "2.0.0a0"',
+  )
+  assertPythonVersionsAligned(root, '2.0.0-alpha.0')
 })

@@ -1,34 +1,24 @@
 # Frontend Runtime Evaluations
 
-The deterministic frontend evaluation suite protects the runtime boundaries
-that qwen-audio-agent can guarantee independently from a Realtime model or
-provider:
+The previous JavaScript `eval:frontend` suite targeted the retired JS Gateway
+runtime and has been removed.
 
-| Dimension | Invariant |
+Live Python tests under `tests/unit` and `tests/integration` cover the
+invariants the current Gateway can guarantee without a Realtime model:
+
+| Dimension | Where it is checked |
 | --- | --- |
-| Routing | Search, URL Fetch, optional Knowledge retrieval, backend Task, and client control remain separate capability-gated tools. |
-| Citation | Sources receive stable per-turn IDs, duplicate URLs keep one identity, unsafe URLs are dropped, and final citations are consumed once. |
-| Interruption | Audio and transcripts arriving after a user interruption are suppressed, while the interruption event is projected once. |
-| Duplicate speech | Duplicate completion signals coalesce before presentation, and repeated acknowledgements do not create another presentation for the same Task. |
-| Prompt injection | Search and Knowledge content stays untrusted data, carries an explicit notice, and cannot change the registered tool surface. |
+| Frontend tool routing | `tests/unit/test_frontend_graph.py`, `tests/unit/test_work_graph.py` |
+| Interruption and turn fencing | `tests/unit/test_turns.py`, `tests/integration/test_realtime_application.py` |
+| Result delivery and duplicate presentation | `tests/unit/test_result_delivery.py`, `tests/unit/test_announcement_window.py` |
+| Work lifecycle | `tests/integration/test_work_runtime.py`, `tests/integration/test_work_recovery.py` |
 
-Run the suite with:
+Search, Knowledge, and citation-identity evaluations belonged to extension
+points that are not connected on the Python Gateway path. See
+[architecture](../architecture.md#current-v2-implementation).
+
+Run:
 
 ```bash
-npm run eval:frontend
+npm run test:python
 ```
-
-Use `npm run eval:frontend -- --json` for a machine-readable report. The same
-evaluations also run from the server test suite and therefore from
-`release:check` and CI.
-
-The suite drives production Runtime components; it does not contain a second
-implementation of routing, presentation, or citation behavior. It makes no
-external request and does not call a language model, so results are fast and
-repeatable on every supported operating system.
-
-These checks do not claim to measure provider-specific semantic quality, such
-as how often one model selects the ideal tool for a natural-language request.
-Such live-model evaluations may reuse the same dimensions, but stay outside the
-deterministic release gate because they require credentials, cost, and
-statistical thresholds.

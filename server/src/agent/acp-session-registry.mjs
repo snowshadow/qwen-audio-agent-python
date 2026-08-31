@@ -4,6 +4,10 @@ import { VersionedJsonStore } from '../core/versioned-json-store.mjs'
 const VERSION = 1
 const MAX_RECONCILIATIONS = 20
 
+function clean(value) {
+  return String(value || '').trim()
+}
+
 function reconciliationKey(fact = {}) {
   return [fact.kind, fact.request_id, fact.outcome].map(String).join('\u0000')
 }
@@ -55,17 +59,26 @@ export class AcpSessionRegistry {
     this.reconciliations = parsed.reconciliations || {}
   }
 
-  get(key) {
+  get(key, { ownerId, allowUnowned = false } = {}) {
     this.load()
     const value = this.coordinators[String(key)]
-    return value && typeof value === 'object' ? { ...value } : null
+    if (!value || typeof value !== 'object') return null
+    const expectedOwner = clean(ownerId)
+    const actualOwner = clean(value.ownerId)
+    if (
+      expectedOwner
+      && (actualOwner ? actualOwner !== expectedOwner : !allowUnowned)
+    ) return null
+    return { ...value }
   }
 
-  set(key, session) {
+  set(key, session, { ownerId } = {}) {
     this.load()
+    const resolvedOwner = clean(ownerId || session.ownerId)
     this.coordinators[String(key)] = {
       sessionId: String(session.sessionId),
       cwd: String(session.cwd),
+      ...(resolvedOwner ? { ownerId: resolvedOwner } : {}),
       ...(Number.isInteger(session.contractVersion)
         ? { contractVersion: session.contractVersion }
         : {}),
@@ -111,32 +124,49 @@ export class AcpSessionRegistry {
     this.save()
   }
 
-  getProject(key) {
+  getProject(key, { ownerId, allowUnowned = false } = {}) {
     this.load()
     const value = this.projects[String(key)]
-    return value && typeof value === 'object' ? { ...value } : null
+    if (!value || typeof value !== 'object') return null
+    const expectedOwner = clean(ownerId)
+    const actualOwner = clean(value.ownerId)
+    if (
+      expectedOwner
+      && (actualOwner ? actualOwner !== expectedOwner : !allowUnowned)
+    ) return null
+    return { ...value }
   }
 
-  setProject(key, session) {
-    this.setProjects([[key, session]])
+  setProject(key, session, { ownerId } = {}) {
+    this.setProjects([[key, session]], { ownerId })
   }
 
-  setProjects(entries) {
+  setProjects(entries, { ownerId } = {}) {
     this.load()
     let changed = false
     for (const [key, session] of entries) {
       const sessionId = String(session.sessionId || '')
       const cwd = String(session.cwd || '')
       if (!sessionId || !cwd) continue
+      const resolvedOwner = clean(ownerId || session.ownerId)
       this.projects[String(key)] = {
         sessionId,
         cwd,
         title: String(session.title || ''),
+        ...(resolvedOwner ? { ownerId: resolvedOwner } : {}),
         updatedAt: Date.now(),
       }
       changed = true
     }
     if (changed) this.save()
+  }
+
+  deleteProject(key) {
+    this.load()
+    if (!Object.hasOwn(this.projects, String(key))) return false
+    delete this.projects[String(key)]
+    this.save()
+    return true
   }
 
   save() {

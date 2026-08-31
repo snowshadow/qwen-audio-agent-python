@@ -3,20 +3,18 @@
 
 import argparse
 import base64
-from collections import deque
 import json
 import queue
 import sys
 import threading
 import time
+from collections import deque
 
 try:
     import sounddevice as sd
-except ImportError:
-    sys.stderr.write(
-        "缺少 Python sounddevice；请运行 pip install sounddevice\n"
-    )
-    raise SystemExit(2)
+except ImportError as error:
+    sys.stderr.write("缺少 Python sounddevice；请运行 pip install sounddevice\n")
+    raise SystemExit(2) from error
 
 
 def main():
@@ -51,8 +49,7 @@ def main():
         if status:
             message = str(status)
             now = time.monotonic()
-            if (message != last_status["message"]
-                    or now - last_status["time"] >= 1.0):
+            if message != last_status["message"] or now - last_status["time"] >= 1.0:
                 last_status["message"] = message
                 last_status["time"] = now
                 emit({"type": "error", "message": message})
@@ -60,10 +57,12 @@ def main():
     def capture_callback(indata, _frames, _time_info, status):
         report_status(status)
         if capture_enabled.is_set():
-            emit({
-                "type": "audio",
-                "audio": base64.b64encode(bytes(indata)).decode("ascii"),
-            })
+            emit(
+                {
+                    "type": "audio",
+                    "audio": base64.b64encode(bytes(indata)).decode("ascii"),
+                }
+            )
 
     def playback_callback(outdata, _frames, _time_info, status):
         report_status(status)
@@ -85,22 +84,26 @@ def main():
                         break
                     playback.popleft()
                     started_responses.discard(response_id)
-                    signals.append({
-                        "type": "playback.ended",
-                        "responseId": response_id,
-                    })
+                    signals.append(
+                        {
+                            "type": "playback.ended",
+                            "responseId": response_id,
+                        }
+                    )
                     continue
 
                 if response_id and response_id not in started_responses:
                     started_responses.add(response_id)
-                    signals.append({
-                        "type": "playback.started",
-                        "responseId": response_id,
-                    })
+                    signals.append(
+                        {
+                            "type": "playback.started",
+                            "responseId": response_id,
+                        }
+                    )
                 data = entry["data"]
                 offset = entry["offset"]
                 count = min(size - cursor, len(data) - offset)
-                rendered[cursor:cursor + count] = data[offset:offset + count]
+                rendered[cursor : cursor + count] = data[offset : offset + count]
                 cursor += count
                 entry["offset"] += count
                 if response_id:
@@ -194,21 +197,25 @@ def main():
                     response_id = str(event.get("responseId", ""))
                     if audio:
                         with playback_lock:
-                            playback.append({
-                                "type": "audio",
-                                "response_id": response_id,
-                                "data": audio,
-                                "offset": 0,
-                            })
+                            playback.append(
+                                {
+                                    "type": "audio",
+                                    "response_id": response_id,
+                                    "data": audio,
+                                    "offset": 0,
+                                }
+                            )
                         use_playback_stream()
                 elif event_type == "done":
                     response_id = str(event.get("responseId", ""))
                     if response_id:
                         with playback_lock:
-                            playback.append({
-                                "type": "done",
-                                "response_id": response_id,
-                            })
+                            playback.append(
+                                {
+                                    "type": "done",
+                                    "response_id": response_id,
+                                }
+                            )
                 elif event_type == "clear":
                     with playback_lock:
                         playback.clear()
@@ -216,11 +223,11 @@ def main():
                 elif event_type == "close":
                     break
             except Exception as error:
-                sys.stderr.write(f"PortAudio 音频流切换失败：{error}\n")
+                sys.stderr.write(f"PortAudio 音频流切换失败: {error}\n")
                 exit_code = 1
                 break
     except Exception as error:
-        sys.stderr.write(f"PortAudio 初始化失败：{error}\n")
+        sys.stderr.write(f"PortAudio 初始化失败: {error}\n")
         exit_code = 1
     finally:
         try:

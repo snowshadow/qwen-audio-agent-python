@@ -1,5 +1,10 @@
 # Lightweight Frontend Profiles
 
+> **v2 Python Gateway.** Profile-selected MCP and OpenAPI tool sources are not
+> connected to the live Gateway. `QWEN_AUDIO_FRONTEND_PROFILE` currently has no
+> effect on those tools.
+> See [architecture](../architecture.md#current-v2-implementation).
+
 A Frontend Profile is a local, versioned composition manifest that selects a
 frontend assistant persona and external tool configurations through one entry
 point. It can keep or share a frontend setup as a directory without introducing

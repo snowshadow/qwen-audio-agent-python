@@ -42,8 +42,8 @@
 
 `USER.md` 是当前用户对默认人设的长期个性化覆盖，不是第二份助手人设，也不是通用事实
 仓库。它可以保存助手如何称呼用户、用户如何称呼助手，以及用户明确要求长期采用的语言、
-回复风格和默认做法。只有用户明确设定或纠正时才会修改；会话后自动整理可以补记这类
-明确指令，但不能推测用户偏好。
+回复风格和默认做法。只有用户明确设定或纠正时才会修改；会话后自动整理尚未接入当前 Python Gateway，
+在完成移植前不能补记这类指令。
 
 判断标准不是描述对象，而是作用域：“助手默认叫千问 Audio”属于 `ASSISTANT.md`；当前
 用户在对话中说“以后你叫小舟”，则“小舟”是当前用户的覆盖，属于 `USER.md`。同理，
@@ -65,19 +65,16 @@
 
 - **明确要求**：对话中说“记住、改成、不再”等，助手会生成精确 Markdown 修改；
   一句话中的多项信息会在同一轮逐项处理，并只生成一次最终回应。
-- **自动整理**：会话结束后，一个轻量文本模型会查漏补缺，把用户明确提出的长期交互
-  指令写入 `USER.md`，把稳定事实与决定写入 `MEMORY.md`。自动整理默认使用
-  DashScope 的 `qwen-flash` 模型（复用 `DASHSCOPE_API_KEY`）；没有可用 API Key
-  时自动关闭，明确要求的记忆不受影响。设置 `QWEN_AUDIO_MEMORY_AUTO=off`
-  可全局关闭；`QWEN_AUDIO_MEMORY_MODEL`、`QWEN_AUDIO_MEMORY_BASE_URL`、
-  `QWEN_AUDIO_MEMORY_API_KEY` 可指向任意 OpenAI 兼容端点（含本地 Ollama）。
+- **自动整理（尚未接入 v2 Python Gateway）**：旧版 JavaScript Gateway 可在会话结束后
+  用轻量文本模型查漏补缺。当前 Python Gateway 未接入该路径。在完成移植前，请通过
+  `memory` 工具写入长期内容。
+  `QWEN_AUDIO_MEMORY_AUTO=off` 仍记录后续移植后的关闭开关。
+  见[架构文档](../architecture.zh.md#当前-v2-实现)。
 
-Realtime 与自动整理都通过同一个记忆服务提交受限 Markdown 变更，不能直接写文件。
-自动整理可以补记用户明确说出的称呼或回复偏好，但不会推测这些设定，也永远不能修改
-`ASSISTANT.md`。密码、
-密钥等敏感内容会被双重过滤拦截。`memory-audit.jsonl` 只记录补丁是否执行、版本和
-错误等诊断信息，不保存完整记忆正文。觉得内容不对，直接在对话中说“那条记错了”
-或“忘掉它”即可；助手会修改或删除对应 Markdown 原文。
+Realtime 通过记忆服务提交受限 Markdown 变更，不直接写文件。密码、密钥等敏感内容
+会被双重过滤拦截。`memory-audit.jsonl` 仍是后续自动整理移植后的诊断日志格式。
+觉得内容不对，直接在对话中说“那条记错了”或“忘掉它”即可；助手会修改或删除
+对应 Markdown 原文。
 
 前台只暴露一个 `memory` 工具，每次调用执行一个原子操作：`read` 读取文档，
 `append` 追加 Markdown，`replace` 用文档中唯一匹配的 `old_text` 替换或删除内容。
@@ -86,12 +83,15 @@ Realtime 与自动整理都通过同一个记忆服务提交受限 Markdown 变�
 
 ## 替换记忆 Provider
 
+> **v2 Python Gateway。** 当前 Gateway 使用内置 Markdown 文档。
+> 下面的 `MemoryProvider` 合同尚未接到 Python 组合根。v2 不再导出嵌入式
+> JavaScript Gateway。
+
 内置的 `USER.md` 和 `MEMORY.md` 是默认实现，不是 Gateway 的固定存储依赖。宿主应用
 可以从公开入口实现版本化的 `MemoryProvider`，并在 Composition Root 注入：
 
 ```js
 import { MEMORY_PROVIDER_PROTOCOL_VERSION } from 'qwen-audio-agent/memory-provider'
-import { createGatewayApplication } from 'qwen-audio-agent/gateway-application'
 
 const memoryProvider = {
   describe: () => ({
@@ -108,8 +108,6 @@ const memoryProvider = {
   health: () => ({ ok: true }),
   async close() {},
 }
-
-const gateway = createGatewayApplication({ memoryProvider })
 ```
 
 `list()` 必须返回同步、有界的 Realtime 上下文快照；远程 Provider 应在 Adapter 内维护

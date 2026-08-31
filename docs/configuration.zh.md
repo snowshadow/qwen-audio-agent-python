@@ -130,6 +130,10 @@ QWEN_AUDIO_WEB_SEARCH_MCP_TOOL=web_search
 
 设置 `QWEN_AUDIO_WEB_SEARCH_PROVIDER=none` 可以关闭前台联网搜索。
 
+前台联网搜索、MCP Client、OpenAPI Adapter、Frontend Profile 工具源和本地唤醒词
+**尚未接入** v2 Python Gateway。下列配置项仍记录后续移植接口，当前不会生效。
+见[架构文档](architecture.zh.md#当前-v2-实现)。
+
 通用 Chatbot 工具可以通过前台 MCP Client 接入。用
 `QWEN_AUDIO_FRONTEND_MCP_CONFIG` 指定带版本的 JSON 文件并逐个启用；可写操作
 需要用户确认。详见[前台 MCP Client](reference/frontend-mcp.zh.md)。

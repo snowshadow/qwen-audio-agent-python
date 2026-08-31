@@ -17,7 +17,7 @@ import {
 SDK 公开：
 
 - `defineBackendAdapter`：在组合阶段校验完整方法面；
-- `createBackendAgentHost`：把 Adapter 接到嵌入式 Gateway 的应用宿主；
+- `createBackendAgentHost`：薄宿主面，包在 `BackendPort` 之上；
 - `BackendWorkRuntime`：把 Gateway Task 输入投射到 `submit`；
 - `BackendEventType`、`backendEvent`：创建规范化后台事件；
 - `verifyBackendAdapterConformance`：与内置 ACP Adapter 共用的契约测试；
@@ -81,7 +81,7 @@ Adapter 可以发布协议无关的可选观测信息，无需扩展 `BackendPor
 
 持续消息和产物分别使用 `backend.message` 与 `backend.artifact`。ACP
 `session/update`、A2A 流式事件和自定义回调都必须先在 Adapter 内归一化，不得把协议
-原始载荷传给 TaskManager 或前台。
+原始载荷传给 Work 运行时或前台。
 
 `kind` 可扩展。通用展示字段包括 `status`、`message`、`label`、`detail`、`category`、
 `tool`、`title`、`updatedAt`、`mode`、`completed` 和 `total`，也允许 Adapter 增加
@@ -96,19 +96,22 @@ Adapter 可以发布协议无关的可选观测信息，无需扩展 `BackendPor
 
 ## 接入 Gateway
 
+v2 不再导出 `qwen-audio-agent/gateway-application`。用 SDK 校验自定义 Adapter，
+再通过 `BackendWorkRuntime` 或 Python `BackendPort` 路径运行。现有
+`AGENT_PROTOCOL` 仍选择内置 ACP 后台，不会动态加载任意代码。
+
 ```js
-import { createGatewayApplication } from 'qwen-audio-agent/gateway-application'
-import { createBackendAgentHost } from 'qwen-audio-agent/backend-adapter-sdk'
+import {
+  BackendWorkRuntime,
+  createBackendAgentHost,
+} from 'qwen-audio-agent/backend-adapter-sdk'
 import { MyBackendAdapter } from './my-backend.mjs'
 
-const agent = createBackendAgentHost(new MyBackendAdapter())
-const application = createGatewayApplication({ agent })
-
-process.once('SIGTERM', () => application.close())
+const backend = createBackendAgentHost(new MyBackendAdapter())
+const runtime = new BackendWorkRuntime({ backend })
 ```
 
-这个入口用于自定义 Node 启动器；现有 `AGENT_PROTOCOL` 仍选择项目内置后台，不会动态
-加载任意代码。完整的非 ACP 内存示例位于
+完整的非 ACP 内存示例位于
 [`examples/backend-adapter`](../../examples/backend-adapter/README.md)。
 
 ## Conformance

@@ -1,9 +1,12 @@
 # 扩展 Realtime Provider
 
-业务宿主可以注入自定义 Realtime Provider，而不必修改 Gateway 的语音会话与后台 Agent 逻辑。
+业务宿主可以定义自定义 Realtime Provider，而不必修改 Gateway 的语音会话与后台 Agent 逻辑。
+
+v2 不再导出 `qwen-audio-agent/gateway-application`。下面的 JavaScript 注册表仍用于
+校验适配器形状。当前 Python Gateway 不会加载它；要把自定义 Provider 接到活路径，
+需要实现 Python `RealtimeProviderPort`。
 
 ```js
-import { createGatewayApplication } from 'qwen-audio-agent/gateway-application'
 import {
   createRealtimeProviderRegistry,
 } from 'qwen-audio-agent/realtime-provider'
@@ -14,10 +17,7 @@ const realtimeProviderRegistry = createRealtimeProviderRegistry({
   defaultProvider: privateRealtimeProvider.key,
 })
 
-createGatewayApplication({
-  realtimeProviderRegistry,
-  realtimeProvider: privateRealtimeProvider.key,
-})
+realtimeProviderRegistry.list()
 ```
 
 扩展边界如下：

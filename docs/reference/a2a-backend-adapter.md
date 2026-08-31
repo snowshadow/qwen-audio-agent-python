@@ -6,13 +6,14 @@ protocol negotiation, messages, Tasks, cancellation, and Artifact decoding.
 A2A objects remain private to the adapter; the Gateway, Task runtime, frontend,
 and clients continue to use their protocol-neutral contracts.
 
-This is a programmatic extension for custom Gateway launchers. It does not add
-an `AGENT_PROTOCOL` value or a Desktop setting.
+This is a programmatic BackendPort adapter. It does not add an
+`AGENT_PROTOCOL` value or a Desktop setting. v2 does not export an embedded
+JavaScript Gateway, and the Python composition root does not load this adapter
+yet.
 
 ## Connect an agent
 
 ```js
-import { createGatewayApplication } from 'qwen-audio-agent/gateway-application'
 import { createBackendAgentHost } from 'qwen-audio-agent/backend-adapter-sdk'
 import {
   createA2ABackendAdapter,
@@ -23,9 +24,6 @@ const backend = createA2ABackendAdapter({
   token: process.env.MY_A2A_TOKEN,
 })
 const agent = createBackendAgentHost(backend)
-const application = createGatewayApplication({ agent })
-
-process.once('SIGTERM', () => application.close())
 ```
 
 `agentCardUrl` is the complete public Agent Card URL. It must use HTTP or HTTPS

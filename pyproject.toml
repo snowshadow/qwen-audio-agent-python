@@ -1,0 +1,62 @@
+[build-system]
+requires = ["hatchling>=1.28"]
+build-backend = "hatchling.build"
+
+[project]
+name = "qwen-audio-agent-python"
+version = "2.0.0a0"
+description = "Python and LangGraph rewrite of the qwen-audio-agent Gateway runtime"
+readme = "README.md"
+requires-python = ">=3.12,<3.15"
+license = { text = "Apache-2.0" }
+authors = [{ name = "qwen-audio-agent contributors" }]
+keywords = ["qwen", "audio", "voice", "agent", "langgraph"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
+dependencies = [
+  "fastapi>=0.128,<1",
+  "langgraph==1.2.11",
+  "langgraph-checkpoint-sqlite>=3.1.1,<4",
+  "pydantic>=2.12,<3",
+  "python-socks[asyncio]>=2.7,<3",
+  "uvicorn>=0.38,<1",
+  "websockets>=16,<17",
+]
+
+[project.scripts]
+qwenaudio-python-gateway = "qwen_audio_agent.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/QwenAudio/qwen-audio-agent"
+Repository = "https://github.com/QwenAudio/qwen-audio-agent"
+Issues = "https://github.com/QwenAudio/qwen-audio-agent/issues"
+
+[dependency-groups]
+dev = [
+  "httpx>=0.28,<1",
+  "pytest>=9,<10",
+  "pytest-asyncio>=1.3,<2",
+  "ruff>=0.14,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/qwen_audio_agent"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "RUF"]
+allowed-confusables = ["，", "；"]

@@ -2,7 +2,7 @@
  * Protocol-neutral events emitted by BackendPort adapters.
  *
  * ACP session updates, A2A task events, and custom backend callbacks are
- * normalized here before entering TaskManager. Protocol payloads must not
+ * normalized here before entering the Work runtime. Protocol payloads must not
  * escape their adapter.
  */
 export const BackendEventType = Object.freeze({

@@ -10,6 +10,7 @@ Run the same public conformance suite used by built-in adapters:
 node --test server/test/backend-adapter-sdk.test.mjs
 ```
 
-For an embedded Gateway, wrap the adapter with `createBackendAgentHost` and
-pass it as `agent` to `createGatewayApplication`. Product-specific credentials,
-transport clients, and retries stay inside the adapter.
+For an adapter self-check, wrap it with `createBackendAgentHost` and run
+`verifyBackendAdapterConformance`. v2 no longer provides an embedded JavaScript
+Gateway. Product-specific credentials, transport clients, and retries stay
+inside the adapter.

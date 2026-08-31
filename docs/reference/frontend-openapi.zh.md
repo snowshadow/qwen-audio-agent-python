@@ -1,5 +1,9 @@
 # 前台 OpenAPI Tool Adapter
 
+> **v2 Python Gateway。** 当前 Gateway 尚未接入该扩展。旧版 JavaScript 运行时已移除。
+> 在完成 Python 移植前，下列配置项不会生效。
+> 见[架构文档](../architecture.zh.md#当前-v2-实现)。
+
 前台 OpenAPI Adapter 用于把选定的 REST 操作接入 Chatbot，不绑定具体
 Realtime Provider，也不绑定后台 Agent。它与前台 MCP Client 复用同一套动态工具
 Source、执行边界和逐操作授权链路。

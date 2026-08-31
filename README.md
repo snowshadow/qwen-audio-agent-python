@@ -27,7 +27,7 @@ tells you:
 ## News
 
 - **2026-08-27 · v2.0.0 (In development)**
-  🚧 The next major version is under active development, with ongoing work on the Agent architecture, task lifecycle, multimodal input, memory, and extensibility.
+  🚧 Gateway core runs in Python with two LangGraph state machines; ACP backends stay on Node. This is a voice product, not a LangGraph Platform app. v1 frontend extensions (MCP, OpenAPI, knowledge retrieval, web search, session-end memory extraction, local wake word) are not wired on that path.
 - **2026-08-20 · [v1.11.0](https://github.com/QwenAudio/qwen-audio-agent/releases/tag/v1.11.0)**
   🧩 Adds embeddable Gateway and Realtime Provider extensions; 🛠️ supports installing and managing Agent Skills; 📎 adds multimodal input to the TUI; 🎨 links pet animations to runtime states.
 - **2026-08-13 · [v1.10.0](https://github.com/QwenAudio/qwen-audio-agent/releases/tag/v1.10.0)**
@@ -71,7 +71,7 @@ https://github.com/user-attachments/assets/ab570531-8da9-4af4-93fa-244bb6614c05
 - Create multiple independent tasks executed asynchronously by the backend Agent, with continuous status tracking
 - Task results automatically return to the current conversation, supporting follow-up questions and modifications
 - WebUI, terminal TUI, and desktop floating orb (macOS / Windows / Linux)
-- Desktop auto-sleep disconnects cloud Realtime without stopping submitted tasks; wake with a configurable shortcut or the local wake word
+- Desktop auto-sleep disconnects cloud Realtime without stopping submitted tasks; wake with a configurable shortcut. Local wake-word detection is not connected on the v2 Python Gateway.
 - Per-user long-term personalization and cross-session memory
 
 ## Architecture
@@ -90,6 +90,31 @@ Throughout, the user always faces the same assistant.
 For the full design and module breakdown, see the [architecture document](docs/architecture.md).
 
 </details>
+
+### Runtime implementation (v2 in development)
+
+v2 is a realtime voice Gateway product. LangGraph owns two bounded state
+machines, not the whole runtime:
+
+- `FrontendTurnGraph` admits and routes tools for one realtime turn.
+- `WorkGraph` checkpoints one Task lifecycle while backend I/O stays outside
+  the graph.
+
+Node and Electron hosts launch the Python CLI. Configured coding agents still
+run through the existing JavaScript ACP adapters over `BackendPort`. The
+package is not a LangGraph Platform app and does not publish those graphs as a
+standalone library.
+
+The durable Task repository remains the source of truth for public task state,
+results, and notification leases—a LangGraph checkpoint is only an execution
+snapshot. Packaged Desktop builds carry the locked Python project but not a
+Python interpreter or `uv`; the host must provide one of those. Final results
+wait for a safe duplex window. Voice delivery is acknowledged only after the
+active client reports `playback.started`; text-only delivery is acknowledged
+after the response completes successfully.
+
+See [architecture](docs/architecture.md#current-v2-implementation) for the
+live catalog and the extensions that are not connected.
 
 ## Agent Support
 
@@ -115,7 +140,11 @@ For detailed configuration and capability boundaries, see the [configuration gui
 
 ## Installation
 
-Requires Node.js 22.22.2+ or 24.15.0+, npm 10+. One-click install (recommended):
+Requires Node.js 22.22.2+ or 24.15.0+, npm 10+, Python 3.12–3.14, and
+[uv](https://docs.astral.sh/uv/). The first Gateway launch prepares the locked
+Python runtime with `uv run --frozen --no-dev`.
+
+Install from npm (recommended):
 
 ```bash
 npm install -g qwen-audio-agent
@@ -149,8 +178,8 @@ QWEN_AUDIO_AGENT_BACKEND_MODEL=qwen3.7-max
 > Gateway paths are implemented.
 
 The Desktop app or `qwenaudio config set --realtime-model <id>` configures the single
-Gateway-wide model. Restart the Gateway after a CLI change. WebUI and TUI display the active
-model but do not override it.
+Gateway-wide model. Restart the Gateway after a CLI change; WebUI and TUI do not
+override the configured model.
 
 2. Start the Gateway, then open another terminal to start the TUI (or use `qwenaudio webui` for the browser UI):
 
@@ -186,8 +215,8 @@ The desktop app provides a floating voice orb that stays on your desktop,
 with a built-in Gateway, automatic idle sleep, a configurable wake shortcut,
 and a local voice wake word. Sleep disconnects the Realtime frontend while
 keeping the app, Gateway, backend Agent, and submitted tasks alive; it is not
-the same as quitting or restarting the desktop app. Completed tasks can wake
-the app and return their results to the conversation.
+the same as quitting or restarting the desktop app. Completed results remain
+pending while asleep and return after the app wakes or reconnects.
 Download the installer for your platform from the releases page, or build
 from source:
 
@@ -219,9 +248,13 @@ permission modes, see the [backend Agent documentation](docs/backends/overview.m
 
 ## Personalization and Memory
 
-User data is stored in `~/.config/qwaudio/` (`ASSISTANT.md`, `USER.md`,
-`MEMORY.md`, `tasks.json`, `logs/`), kept local only, never
-committed to the repository. See [assistant profile, user preferences, and memory](docs/reference/memory.md).
+By default, the CLI keeps shared assistant data and runtime state under
+`~/.config/qwaudio/`. Desktop uses `QWAUDIO_DATA_DIR` for the shared identity,
+profile, memory, configuration, and notes, while `QWAUDIO_CONFIG_DIR` owns its
+Gateway lease, Task ledger, conversations, checkpoints, skins, and logs. Both
+remain local and are never committed. See the
+[configuration guide](docs/configuration.md) and
+[assistant profile, user preferences, and memory](docs/reference/memory.md).
 
 ## Important Notes
 
@@ -236,6 +269,19 @@ For detailed data boundaries, see the [privacy notice](PRIVACY.md); for
 network and permission configuration, see the [configuration guide](docs/configuration.md).
 
 ## Development
+
+The v2 source tree requires Python 3.12–3.14 and
+[uv](https://docs.astral.sh/uv/) for the Gateway runtime, in addition to the
+Node.js requirements above.
+
+```bash
+uv sync --frozen
+uv run pytest
+uv run ruff check src tests
+```
+
+`npm test` covers the Node workspaces only. Run `npm run test:python` (or the
+`uv` commands above) before a Gateway change. CI runs both.
 
 ```bash
 npm install

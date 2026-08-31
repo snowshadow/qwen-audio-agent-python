@@ -1,5 +1,10 @@
 # 知识检索 Provider
 
+> **v2 Python Gateway。** 当前 Gateway 尚未接入该扩展。
+> `qwen-audio-agent/knowledge-provider` 导出仍是公开合同。现在注入 Provider
+> 不会作用于当前 Gateway。
+> 见[架构文档](../architecture.zh.md#当前-v2-实现)。
+
 qwen-audio-agent 只定义轻量的知识检索边界，不内置一套具体 RAG。仓库不替用户选择
 向量数据库、Embedding 模型、文档解析器、切分策略、索引或入库流程；应用可以接入自己
 已经使用的知识系统。
@@ -139,18 +144,19 @@ Trace、超时和取消上下文只能由 Gateway 注入。Provider 不能从模
 
 ## 组装方式
 
-在应用 Composition Root 注入：
+公开合同是 `qwen-audio-agent/knowledge-provider`。v2 不再提供嵌入式 JavaScript
+Gateway，Python 组合根也尚未接受知识 Provider：
 
 ```js
-import { createGatewayApplication } from 'qwen-audio-agent/gateway-application'
+import {
+  KNOWLEDGE_PROVIDER_PROTOCOL_VERSION,
+  assertKnowledgeRetrievalProvider,
+} from 'qwen-audio-agent/knowledge-provider'
 
-const gateway = createGatewayApplication({
-  knowledgeProvider: provider,
-})
+assertKnowledgeRetrievalProvider(provider)
 ```
 
-这是唯一必须的接入点。Runtime 会发布 `knowledge` 能力、注册检索工具，并随 Gateway
-关闭 Provider。Provider 的专用配置继续放在宿主应用或 Adapter 内。
+Provider 的专用配置继续放在宿主应用或 Adapter 内。
 
 ## Adapter 映射建议
 

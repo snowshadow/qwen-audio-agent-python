@@ -1,5 +1,9 @@
 # 轻量 Frontend Profile
 
+> **v2 Python Gateway。** Profile 所选的 MCP 与 OpenAPI 工具源尚未接入当前 Gateway。
+> `QWEN_AUDIO_FRONTEND_PROFILE` 目前不会启用这些工具。
+> 见[架构文档](../architecture.zh.md#当前-v2-实现)。
+
 Frontend Profile 是一个本地、版本化的组合清单，用一个入口选择前台助手画像和外部工具
 配置。它适合把一套前台体验作为目录保存或分享，但不会引入新的 Skill 或插件协议。
 

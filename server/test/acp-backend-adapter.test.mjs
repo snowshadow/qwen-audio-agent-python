@@ -7,6 +7,7 @@ import {
   AcpBackendAdapter,
   acpBackendProfile,
 } from '../src/agent/acp-backend-adapter.mjs'
+import { projectSessionKey } from '../src/agent/acp-backend-session-utils.mjs'
 
 function completed(speech = '完成') {
   return speech
@@ -77,6 +78,7 @@ function fakeAcpClient({
       cwd: '/previous',
       title: 'Previous project',
       updatedAt: '2026-01-01T00:00:00Z',
+      ownerId: 'owner-one',
     }],
   ])
   let toolServer
@@ -523,7 +525,7 @@ test('continues a remembered project Session using only its Session ID', async (
     sessionId: 'previous-session',
     cwd: '/previous',
     title: 'Previous project',
-  })
+  }, { ownerId: 'owner-one' })
   const result = await adapter.runCoordinator('delegate', {
     ownerId: 'owner-one',
     coordinationRunId: 'work-one',
@@ -538,6 +540,15 @@ test('continues a remembered project Session using only its Session ID', async (
     && call[2].cwd === '/previous'
   )))
   assert.equal(client.calls.some(call => call[0] === 'list'), false)
+  assert.equal(
+    adapter.registry.getProject(projectSessionKey(
+      'owner-one',
+      'qoder',
+      'previous-session',
+    ), { ownerId: 'owner-one' }).ownerId,
+    'owner-one',
+  )
+  assert.equal(adapter.registry.getProject('qoder:previous-session'), null)
   await adapter.close()
 })
 
@@ -618,6 +629,92 @@ test('recovers the original project before continuing an unremembered Session', 
     && call[1] === 'previous-session'
     && call[2].cwd === '/previous'
   )))
+  await adapter.close()
+})
+
+test('lists only project Sessions whose current owner is provable', async () => {
+  const client = fakeAcpClient()
+  client.sessions.set('remembered-session', {
+    sessionId: 'remembered-session',
+    cwd: '/remembered',
+    title: 'Remembered by owner one',
+  })
+  client.sessions.set('other-owner-session', {
+    sessionId: 'other-owner-session',
+    cwd: '/other',
+    title: 'Other owner',
+    ownerId: 'owner-two',
+  })
+  client.sessions.set('unowned-session', {
+    sessionId: 'unowned-session',
+    cwd: '/unknown',
+    title: 'Unknown owner',
+  })
+  client.sessions.set('conflicting-session', {
+    sessionId: 'conflicting-session',
+    cwd: '/conflict',
+    title: 'Conflicting owner evidence',
+    ownerId: 'owner-one',
+  })
+  const adapter = new AcpBackendAdapter({
+    protocol: 'qoder',
+    directory: '/coordinator',
+    client,
+    sessionToolServer: fakeToolServer(),
+  })
+  adapter.registry.setProject(projectSessionKey(
+    'owner-one',
+    'qoder',
+    'remembered-session',
+  ), {
+    sessionId: 'remembered-session',
+    cwd: '/remembered',
+    title: 'Remembered by owner one',
+  }, { ownerId: 'owner-one' })
+  adapter.registry.setProject('qoder:conflicting-session', {
+    sessionId: 'conflicting-session',
+    cwd: '/conflict',
+    title: 'Previously owned by owner two',
+  }, { ownerId: 'owner-two' })
+
+  const listed = await adapter.listProjectSessions('owner-one')
+
+  assert.deepEqual(listed.sessions.map(item => item.session_id).sort(), [
+    'previous-session',
+    'remembered-session',
+  ])
+  await adapter.close()
+})
+
+test('does not continue another owner or unowned global Session', async () => {
+  const client = fakeAcpClient({ action: 'send' })
+  client.sessions.set('unowned-session', {
+    sessionId: 'unowned-session',
+    cwd: '/unknown',
+    title: 'Unknown owner',
+  })
+  const adapter = new AcpBackendAdapter({
+    protocol: 'qoder',
+    directory: '/coordinator',
+    client,
+    sessionToolServer: fakeToolServer(),
+  })
+
+  for (const sessionId of ['previous-session', 'unowned-session']) {
+    await assert.rejects(
+      adapter.continueProjectSession({
+        ownerId: 'owner-two',
+        cwd: '/coordinator',
+        coordinationRunId: 'work-two',
+        inputBlocks: [],
+      }, {
+        session_id: sessionId,
+        prompt: 'continue previous work',
+      }),
+      /Session 的项目目录未知/,
+    )
+  }
+  assert.equal(client.calls.some(call => call[0] === 'resume'), false)
   await adapter.close()
 })
 
@@ -1292,7 +1389,7 @@ for (const action of ['start', 'send']) {
   })
 }
 
-test('ACP permissions expose detailed session-scoped allow and reject semantics', async () => {
+test('ACP permissions expose details and prefer one-shot allow and reject options', async () => {
   const client = fakeAcpClient()
   const adapter = new AcpBackendAdapter({
     protocol: 'opencode',
@@ -1302,6 +1399,7 @@ test('ACP permissions expose detailed session-scoped allow and reject semantics'
   const options = [
     { optionId: 'once', name: 'Allow', kind: 'allow_once' },
     { optionId: 'always', name: 'Always', kind: 'allow_always' },
+    { optionId: 'reject-always', name: 'Reject always', kind: 'reject_always' },
     { optionId: 'reject', name: 'Reject', kind: 'reject_once' },
   ]
   const events = []
@@ -1331,7 +1429,7 @@ test('ACP permissions expose detailed session-scoped allow and reject semantics'
   const requested = events.find(event => (
     event.type === 'backend.permission.requested'
   ))
-  assert.equal(requested.permission.approvalScope, 'session')
+  assert.equal(requested.permission.approvalScope, 'once')
   assert.equal(
     requested.permission.summary,
     'Write project file：Update the generated project',
@@ -1347,8 +1445,8 @@ test('ACP permissions expose detailed session-scoped allow and reject semantics'
     ownerId: 'owner-one',
   })
   assert.deepEqual(await pending, {
-    // Gateway owns the session-wide policy, so the backend receives the
-    // narrowest option for each individual request.
+    // The public decision resolves this request only, so the backend receives
+    // the narrowest available option.
     outcome: { outcome: 'selected', optionId: 'once' },
   })
   assert.ok(events.some(event => (
@@ -1371,6 +1469,7 @@ test('ACP permissions expose detailed session-scoped allow and reject semantics'
   }, {
     session: client.sessions.get('coordinator-session'),
   })
+  await new Promise(resolve => setImmediate(resolve))
   const repeatedRequest = events.filter(event => (
     event.type === 'backend.permission.requested'
   )).at(-1)
@@ -1379,8 +1478,99 @@ test('ACP permissions expose detailed session-scoped allow and reject semantics'
     ownerId: 'owner-one',
   })
   assert.deepEqual(await repeated, {
+    // A normal rejection remains request-scoped even when the backend also
+    // advertises a persistent rejection option.
     outcome: { outcome: 'selected', optionId: 'reject' },
   })
+  await adapter.close()
+})
+
+test('serializes concurrent permissions for one Work and exposes the next after resolution', async () => {
+  const adapter = new AcpBackendAdapter({
+    protocol: 'opencode',
+    client: fakeAcpClient(),
+    sessionToolServer: fakeToolServer(),
+  })
+  const options = [
+    { optionId: 'allow-once', kind: 'allow_once' },
+    { optionId: 'reject-once', kind: 'reject_once' },
+  ]
+  const events = []
+  const session = {
+    sessionId: 'coordinator',
+    ownerId: 'owner-one',
+    coordinationRunId: 'work-one',
+    permissionScopeId: 'prompt-one',
+    onEvent: event => events.push(event),
+  }
+  const first = adapter.handlePermission({
+    toolCall: { name: 'write', rawInput: { path: '/project/one' } },
+    options,
+  }, { session })
+  const second = adapter.handlePermission({
+    toolCall: { name: 'write', rawInput: { path: '/project/two' } },
+    options,
+  }, { session })
+
+  assert.equal(adapter.pendingPermissions.size, 1)
+  assert.equal(
+    events.filter(event => event.type === 'backend.permission.requested').length,
+    1,
+  )
+  const firstId = [...adapter.pendingPermissions.keys()][0]
+  await adapter.resolveAuthorization(firstId, 'always', { ownerId: 'owner-one' })
+  assert.deepEqual(await first, {
+    outcome: { outcome: 'selected', optionId: 'allow-once' },
+  })
+
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(adapter.pendingPermissions.size, 1)
+  assert.equal(
+    events.filter(event => event.type === 'backend.permission.requested').length,
+    2,
+  )
+  const secondId = [...adapter.pendingPermissions.keys()][0]
+  assert.notEqual(secondId, firstId)
+  await adapter.resolveAuthorization(secondId, 'reject', { ownerId: 'owner-one' })
+  assert.deepEqual(await second, {
+    outcome: { outcome: 'selected', optionId: 'reject-once' },
+  })
+  await adapter.close()
+})
+
+test('reports cancelled when approval has no matching ACP allow option', async () => {
+  const adapter = new AcpBackendAdapter({
+    protocol: 'opencode',
+    client: fakeAcpClient(),
+    sessionToolServer: fakeToolServer(),
+  })
+  const events = []
+  const requested = adapter.handlePermission({
+    toolCall: { name: 'write', rawInput: { path: '/project/file' } },
+    options: [
+      { optionId: 'allow-always', kind: 'allow_always' },
+      { optionId: 'reject-once', kind: 'reject_once' },
+    ],
+  }, {
+    session: {
+      ownerId: 'owner-one',
+      coordinationRunId: 'work-one',
+      onEvent: event => events.push(event),
+    },
+  })
+  const authorizationId = [...adapter.pendingPermissions.keys()][0]
+  const permission = await adapter.resolveAuthorization(
+    authorizationId,
+    'always',
+    { ownerId: 'owner-one' },
+  )
+
+  assert.equal(permission.status, 'cancelled')
+  assert.deepEqual(await requested, { outcome: { outcome: 'cancelled' } })
+  assert.equal(
+    events.find(event => event.type === 'backend.permission.resolved').permission.status,
+    'cancelled',
+  )
   await adapter.close()
 })
 
@@ -1391,6 +1581,7 @@ test('permission cleanup is isolated to the ACP prompt that requested it', async
     sessionToolServer: fakeToolServer(),
   })
   const options = [
+    { optionId: 'once', kind: 'allow_once' },
     { optionId: 'always', kind: 'allow_always' },
     { optionId: 'reject', kind: 'reject_once' },
   ]
@@ -1418,8 +1609,11 @@ test('permission cleanup is isolated to the ACP prompt that requested it', async
       permissionScopeId: 'project-prompt',
     },
   })
-  const projectPermission = [...adapter.pendingPermissions.values()]
-    .find(record => record.sessionId === 'project')
+  assert.equal(
+    [...adapter.pendingPermissions.values()]
+      .some(record => record.sessionId === 'project'),
+    false,
+  )
 
   adapter.cancelPermissionsForScope('coordinator-prompt')
   assert.deepEqual(await coordinator, {
@@ -1430,35 +1624,241 @@ test('permission cleanup is isolated to the ACP prompt that requested it', async
     'backend.permission.resolved',
   )
   assert.equal(coordinatorEvents.at(-1).permission.status, 'cancelled')
+  await new Promise(resolve => setImmediate(resolve))
+  const projectPermission = [...adapter.pendingPermissions.values()]
+    .find(record => record.sessionId === 'project')
   assert.equal(adapter.pendingPermissions.has(projectPermission.id), true)
   await adapter.resolveAuthorization(projectPermission.id, 'always', {
     ownerId: 'owner-one',
   })
   assert.deepEqual(await project, {
-    outcome: { outcome: 'selected', optionId: 'always' },
+    outcome: { outcome: 'selected', optionId: 'once' },
   })
   await adapter.close()
 })
 
-test('automatically allows only the Gateway-owned Session MCP tools', async () => {
+test('auto-allows a registered Session tool only during its bound owner run', async () => {
+  const client = fakeAcpClient()
+  const adapter = new AcpBackendAdapter({
+    protocol: 'qoder',
+    client,
+    sessionToolServer: fakeToolServer(),
+  })
+  const originalPrompt = client.prompt.bind(client)
+  let permissionResult
+  client.prompt = async (sessionId, prompt, options) => {
+    if (sessionId === 'coordinator-session' && !permissionResult) {
+      permissionResult = await adapter.handlePermission({
+        sessionId,
+        toolCall: {
+          toolCallId: 'session-tool',
+          title: 'qwen_audio_agent_session_start (qwen_audio_agent)',
+        },
+        options: [
+          { optionId: 'once', name: 'Allow', kind: 'allow_once' },
+        ],
+      }, { session: client.sessions.get(sessionId) })
+    }
+    return originalPrompt(sessionId, prompt, options)
+  }
+
+  await adapter.runCoordinator('plain follow-up', {
+    ownerId: 'owner-one',
+    coordinationRunId: 'work-one',
+  })
+
+  assert.deepEqual(permissionResult, {
+    outcome: { outcome: 'selected', optionId: 'once' },
+  })
+  assert.equal(adapter.pendingPermissions.size, 0)
+  await adapter.close()
+})
+
+test('does not let a trusted-looking title override a dangerous tool name', async () => {
+  const client = fakeAcpClient()
+  const adapter = new AcpBackendAdapter({
+    protocol: 'qoder',
+    client,
+    sessionToolServer: fakeToolServer(),
+  })
+  const originalPrompt = client.prompt.bind(client)
+  const events = []
+  let permissionResult
+  client.prompt = async (sessionId, prompt, options) => {
+    if (sessionId === 'coordinator-session' && !permissionResult) {
+      const session = client.sessions.get(sessionId)
+      session.onEvent = event => events.push(event)
+      permissionResult = adapter.handlePermission({
+        sessionId,
+        toolCall: {
+          toolCallId: 'forged-session-tool',
+          name: 'shell',
+          title: 'qwen_audio_agent_session_start (qwen_audio_agent)',
+        },
+        options: [
+          { optionId: 'once', name: 'Allow', kind: 'allow_once' },
+          { optionId: 'reject', name: 'Reject', kind: 'reject_once' },
+        ],
+      }, { session })
+    }
+    return originalPrompt(sessionId, prompt, options)
+  }
+
+  await adapter.runCoordinator('plain follow-up', {
+    ownerId: 'owner-one',
+    coordinationRunId: 'work-one',
+    onEvent: event => events.push(event),
+  })
+
+  assert.equal(
+    events.filter(event => event.type === 'backend.permission.requested').length,
+    1,
+  )
+  assert.deepEqual(await permissionResult, {
+    outcome: { outcome: 'cancelled' },
+  })
+  await adapter.close()
+})
+
+test('cancels an internal-looking permission without a known ACP Session', async () => {
   const adapter = new AcpBackendAdapter({
     protocol: 'qoder',
     client: fakeAcpClient(),
     sessionToolServer: fakeToolServer(),
   })
+
   const result = await adapter.handlePermission({
+    sessionId: 'unknown-session',
     toolCall: {
       toolCallId: 'session-tool',
-      title: 'qwen_audio_agent_session_start (qwen_audio_agent)',
+      name: 'qwen_audio_agent_session_start',
+    },
+    options: [{ optionId: 'once', kind: 'allow_once' }],
+  })
+
+  assert.deepEqual(result, { outcome: { outcome: 'cancelled' } })
+  assert.equal(adapter.pendingPermissions.size, 0)
+  await adapter.close()
+})
+
+test('does not auto-allow Session tools in an unregistered project Session', async () => {
+  const client = fakeAcpClient()
+  const tools = fakeToolServer()
+  client.bind(tools)
+  const adapter = new AcpBackendAdapter({
+    protocol: 'qoder',
+    client,
+    sessionToolServer: tools,
+  })
+  const originalPrompt = client.prompt.bind(client)
+  const events = []
+  let projectPermission
+  client.prompt = async (sessionId, prompt, options) => {
+    if (sessionId.startsWith('project-') && !projectPermission) {
+      projectPermission = adapter.handlePermission({
+        sessionId,
+        toolCall: {
+          toolCallId: 'project-session-tool',
+          name: 'qwen_audio_agent_session_start',
+        },
+        options: [
+          { optionId: 'once', kind: 'allow_once' },
+          { optionId: 'reject', kind: 'reject_once' },
+        ],
+      }, { session: client.sessions.get(sessionId) })
+    }
+    return originalPrompt(sessionId, prompt, options)
+  }
+
+  await adapter.runCoordinator('delegate', {
+    ownerId: 'owner-one',
+    coordinationRunId: 'work-one',
+    onEvent: event => events.push(event),
+  })
+
+  assert.equal(
+    events.filter(event => event.type === 'backend.permission.requested').length,
+    1,
+  )
+  assert.deepEqual(await projectPermission, {
+    outcome: { outcome: 'cancelled' },
+  })
+  await adapter.close()
+})
+
+test('routes stale and cross-owner Session tool requests through one-shot authorization', async () => {
+  const client = fakeAcpClient()
+  const adapter = new AcpBackendAdapter({
+    protocol: 'qoder',
+    client,
+    sessionToolServer: fakeToolServer(),
+  })
+  const originalPrompt = client.prompt.bind(client)
+  const crossOwnerEvents = []
+  let crossOwnerPermission
+  client.prompt = async (sessionId, prompt, options) => {
+    if (sessionId === 'coordinator-session' && !crossOwnerPermission) {
+      const active = client.sessions.get(sessionId)
+      crossOwnerPermission = adapter.handlePermission({
+        sessionId,
+        toolCall: {
+          toolCallId: 'cross-owner-session-tool',
+          name: 'qwen_audio_agent_session_status',
+        },
+        options: [
+          { optionId: 'once', kind: 'allow_once' },
+          { optionId: 'reject', kind: 'reject_once' },
+        ],
+      }, {
+        session: {
+          ...active,
+          ownerId: 'owner-two',
+          onEvent: event => crossOwnerEvents.push(event),
+        },
+      })
+    }
+    return originalPrompt(sessionId, prompt, options)
+  }
+
+  await adapter.runCoordinator('plain follow-up', {
+    ownerId: 'owner-one',
+    coordinationRunId: 'work-one',
+  })
+  assert.equal(
+    crossOwnerEvents.filter(event => (
+      event.type === 'backend.permission.requested'
+    )).length,
+    1,
+  )
+  assert.deepEqual(await crossOwnerPermission, {
+    outcome: { outcome: 'cancelled' },
+  })
+
+  const staleEvents = []
+  const session = client.sessions.get('coordinator-session')
+  session.onEvent = event => staleEvents.push(event)
+  const stalePermission = adapter.handlePermission({
+    sessionId: session.sessionId,
+    toolCall: {
+      toolCallId: 'stale-session-tool',
+      name: 'qwen_audio_agent_session_status',
     },
     options: [
-      { optionId: 'once', name: 'Allow', kind: 'allow_once' },
+      { optionId: 'once', kind: 'allow_once' },
+      { optionId: 'reject', kind: 'reject_once' },
     ],
+  }, { session })
+  await new Promise(resolve => setImmediate(resolve))
+  const request = staleEvents.find(event => (
+    event.type === 'backend.permission.requested'
+  ))
+  assert.ok(request)
+  await adapter.resolveAuthorization(request.permission.id, 'reject', {
+    ownerId: 'owner-one',
   })
-  assert.deepEqual(result, {
-    outcome: { outcome: 'selected', optionId: 'once' },
+  assert.deepEqual(await stalePermission, {
+    outcome: { outcome: 'selected', optionId: 'reject' },
   })
-  assert.equal(adapter.pendingPermissions.size, 0)
   await adapter.close()
 })
 
@@ -2278,6 +2678,11 @@ test('OpenClaw reattaches a persisted native delegation after Gateway restart', 
     baseUrl: 'http://127.0.0.1:18789',
     client,
     nativeDelegationAdapter: {
+      canRecover({ runId, sessionId, ownerId }) {
+        return runId === 'run-recovered'
+          && sessionId === 'agent:child:recovered'
+          && ownerId === 'owner-one'
+      },
       async wait({ runId, sessionId }) {
         assert.equal(runId, 'run-recovered')
         assert.equal(sessionId, 'agent:child:recovered')
@@ -2285,8 +2690,7 @@ test('OpenClaw reattaches a persisted native delegation after Gateway restart', 
       },
     },
   })
-
-  const result = await adapter.recoverDelegatedWork({
+  const persisted = {
     id: 'work-one',
     ownerId: 'owner-one',
     objective: '恢复项目任务',
@@ -2296,7 +2700,24 @@ test('OpenClaw reattaches a persisted native delegation after Gateway restart', 
       directory: '/project',
       title: '恢复项目',
     },
-  }, {
+  }
+  assert.equal(await adapter.canRecoverDelegatedWork(persisted), false)
+  adapter.registry.setProject(projectSessionKey(
+    'owner-one',
+    'openclaw',
+    'agent:child:recovered',
+  ), {
+    sessionId: 'agent:child:recovered',
+    cwd: '/project',
+    title: '恢复项目',
+  }, { ownerId: 'owner-one' })
+  assert.equal(await adapter.canRecoverDelegatedWork(persisted), true)
+  assert.equal(await adapter.canRecoverDelegatedWork({
+    ...persisted,
+    ownerId: 'owner-two',
+  }), false)
+
+  const result = await adapter.recoverDelegatedWork(persisted, {
     onEvent: event => events.push(event),
   })
 
@@ -2308,6 +2729,44 @@ test('OpenClaw reattaches a persisted native delegation after Gateway restart', 
   assert.ok(events.some(
     event => event.type === 'backend.delegation.completed',
   ))
+  await adapter.close()
+})
+
+test('rejects a native recovery probe that cannot finish within its bound', async () => {
+  const adapter = new AcpBackendAdapter({
+    protocol: 'openclaw',
+    directory: '/coordinator',
+    baseUrl: 'http://127.0.0.1:18789',
+    client: fakeAcpClient(),
+    recoveryProbeTimeoutMs: 5,
+    nativeDelegationAdapter: {
+      canRecover() {
+        return new Promise(() => {})
+      },
+      async wait() {
+        throw new Error('must not wait')
+      },
+    },
+  })
+  adapter.registry.setProject(projectSessionKey(
+    'owner-one',
+    'openclaw',
+    'agent:child:stale',
+  ), {
+    sessionId: 'agent:child:stale',
+    cwd: '/project',
+    title: 'Stale project',
+  }, { ownerId: 'owner-one' })
+
+  assert.equal(await adapter.canRecoverDelegatedWork({
+    id: 'work-stale',
+    ownerId: 'owner-one',
+    delegation: {
+      id: 'run-stale',
+      sessionId: 'agent:child:stale',
+      directory: '/project',
+    },
+  }), false)
   await adapter.close()
 })
 
@@ -2438,7 +2897,10 @@ test('reports recent project Session updates with Gateway delegation status', as
     await new Promise(resolve => setImmediate(resolve))
   }
 
-  const status = adapter.statusForDelegation({ session_id: 'project-1' })
+  const status = adapter.statusForDelegation(
+    { session_id: 'project-1' },
+    'owner-one',
+  )
   assert.equal(status.status, 'running')
   assert.deepEqual(status.recent_updates, [
     {
@@ -2456,6 +2918,25 @@ test('reports recent project Session updates with Gateway delegation status', as
       total: 2,
     },
   ])
+
+  assert.deepEqual(
+    adapter.statusForDelegation(
+      { session_id: 'project-1' },
+      'owner-two',
+    ),
+    { status: 'not_found' },
+  )
+  assert.deepEqual(
+    await adapter.cancelDelegation(
+      { session_id: 'project-1' },
+      'owner-two',
+    ),
+    { status: 'not_found' },
+  )
+  assert.equal(
+    adapter.coordinationRuns.get('work-one').delegation.status,
+    'running',
+  )
 
   await adapter.cancelWork('work-one', { ownerId: 'owner-one' })
   await assert.rejects(running, /取消/)

@@ -60,7 +60,17 @@ export class AgentClient {
   }
 
   canRecoverDelegatedWork(task) {
+    // The Python Work runtime asks synchronously through this host surface.
+    // An adapter that needs a live probe must fail closed on this path.
+    if (typeof this.adapter.canRecoverDelegatedWorkSync === 'function') {
+      return this.adapter.canRecoverDelegatedWorkSync(task) === true
+    }
     return this.adapter.canRecoverDelegatedWork?.(task) === true
+  }
+
+  async validateRecoverableDelegatedWork(task) {
+    // The Python BackendPort bridge can await the bounded native probe.
+    return await this.adapter.canRecoverDelegatedWork?.(task) === true
   }
 
   recoverDelegatedWork(task, options = {}) {
@@ -156,6 +166,9 @@ export const agent = {
   canRecoverDelegatedWork: task => config.agentProtocol
     ? requireAgent().canRecoverDelegatedWork(task)
     : false,
+  validateRecoverableDelegatedWork: task => config.agentProtocol
+    ? requireAgent().validateRecoverableDelegatedWork(task)
+    : Promise.resolve(false),
   recoverDelegatedWork: (task, options = {}) =>
     requireAgent().recoverDelegatedWork(task, options),
   uiUrl: (options = {}) => requireAgent().uiUrl(options),

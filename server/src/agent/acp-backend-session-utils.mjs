@@ -10,8 +10,28 @@ export function coordinatorKey(ownerId, protocol) {
   return `${protocol}:${encodeURIComponent(clean(ownerId) || 'personal')}:backend`
 }
 
-export function projectSessionKey(protocol, sessionId) {
-  return `${protocol}:${clean(sessionId)}`
+export function projectSessionKey(ownerId, protocol, sessionId) {
+  return [
+    clean(protocol),
+    encodeURIComponent(clean(ownerId) || 'personal'),
+    'project',
+    encodeURIComponent(clean(sessionId)),
+  ].join(':')
+}
+
+export function legacyProjectSessionKey(protocol, sessionId) {
+  return `${clean(protocol)}:${clean(sessionId)}`
+}
+
+export function sessionOwnerId(session) {
+  return clean(
+    session?.ownerId
+    || session?.owner_id
+    || session?.meta?.ownerId
+    || session?.meta?.owner_id
+    || session?._meta?.ownerId
+    || session?._meta?.owner_id,
+  )
 }
 
 export function sessionSummary(session) {

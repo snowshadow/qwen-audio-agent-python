@@ -5,13 +5,12 @@
 Artifact 解码。A2A 对象只存在于 Adapter 内部；Gateway、Task Runtime、语音前台和
 客户端仍使用协议无关的现有契约。
 
-这是供自定义 Gateway 启动器使用的编程扩展，不新增 `AGENT_PROTOCOL` 值，也不在桌面
-设置中增加选项。
+这是编程式 `BackendPort` 适配器，不新增 `AGENT_PROTOCOL` 值，也不在桌面设置中增加
+选项。v2 不再导出嵌入式 JavaScript Gateway，Python 组合根也尚未加载该 Adapter。
 
 ## 连接 Agent
 
 ```js
-import { createGatewayApplication } from 'qwen-audio-agent/gateway-application'
 import { createBackendAgentHost } from 'qwen-audio-agent/backend-adapter-sdk'
 import {
   createA2ABackendAdapter,
@@ -22,9 +21,6 @@ const backend = createA2ABackendAdapter({
   token: process.env.MY_A2A_TOKEN,
 })
 const agent = createBackendAgentHost(backend)
-const application = createGatewayApplication({ agent })
-
-process.once('SIGTERM', () => application.close())
 ```
 
 `agentCardUrl` 是完整的公开 Agent Card URL，只允许 HTTP/HTTPS，且不能在 URL 中携带

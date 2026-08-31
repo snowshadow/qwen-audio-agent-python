@@ -4,33 +4,62 @@
 
 ## 开发环境
 
-需要 Node.js 22.22.2 或 24.15.0、npm 10+。使用 nvm 时：
+需要 Node.js 22.22.2 或 24.15.0、npm 10+、Python 3.12–3.14 和
+[uv](https://docs.astral.sh/uv/)。使用 nvm 时：
 
 ```bash
 nvm install
 nvm use
+uv sync --frozen
 npm ci
 ```
+
+当前 Gateway 运行时在 Python 中。Node 与 Electron 只负责启动该进程，以及保留的
+ACP 后台适配器。修改 Gateway、Task、Realtime 工具或协议时，以
+`src/qwen_audio_agent/` 为准。活着的 JavaScript 是 `server/src/agent/`、
+`server/src/process/`、Python 桥，以及公开 SDK 合同
+（`backend-adapter-sdk`、`a2a-backend-adapter`、`realtime-provider`、
+`knowledge-provider`、`memory-provider`）。已下线的 JS Gateway 组合根不再保留。
 
 运行完整检查：
 
 ```bash
 npm run lint
 npm test
+npm run test:python
 npm run build
 npm run release:check
 ```
 
+`npm test` 只覆盖 Node 工作区。Python Gateway 必须另外运行 `npm run test:python`
+（`uv run pytest` 与 `uv run ruff check src tests`）。CI 对两者分别建任务。
+
 提交前请确保没有把 `.env`、API Key、用户档案、任务状态、日志或后台工作目录加入
-版本控制。
+版本控制。不要提交 `.gitnexus/` 索引。
+
+## 版本
+
+根目录 `package.json` 是产品版本的唯一来源。`pyproject.toml` 与
+`src/qwen_audio_agent/__init__.py` 的 `__version__` 必须彼此一致。
+`npm run version:set` 会同时更新 npm 工作区和对应的 PEP 440 版本
+（例如 `2.0.0-alpha.0` → `2.0.0a0`）。
+
+当前 v2 开发窗口：npm 仍为 `1.11.0`（上一稳定线），Python Gateway 为 `2.0.0a0`。
+第一次发布 v2 时运行 `npm run version:set -- 2.0.0-alpha.0` 对齐两者。此后
+npm 主版本号大于等于 2 时，发布检查会要求 Python 版本与 npm 版本对应。
 
 ## 变更原则
 
 - 保持 Realtime 前台与后台 Agent 的边界，遵循 `docs/architecture.md`。
-- 修复应包含覆盖失败场景的测试。
+- 修复应包含覆盖失败场景的测试。Gateway 行为变化需要 Python 测试；后台适配器
+  变化需要 Node 测试。
 - 避免在无关变更中重排或重写大段代码。
 - 新配置必须有安全默认值，并同步更新 `.env.example` 与配置文档。
 - 用户可见行为变化应更新 `CHANGELOG.md`。
+- 文档中尚未接入 Python Gateway 的扩展点必须标明未接入，不要写成当前能力。
+- 不要把 ACP 后台适配器改写成 Python，也不要把 Realtime 或桌面壳塞进 LangGraph。
+  改 Gateway 图与 Task 生命周期用 Python；改后台 Agent 接入用 `server/src/agent/`
+  与 `server/src/process/`。
 
 ## Pull Request
 
@@ -43,7 +72,7 @@ npm run release:check
 ## 发布
 
 根目录 `package.json` 是项目版本的唯一来源。准备发布时使用以下任一命令，
-脚本会同步根包、所有 workspace 和 `package-lock.json`：
+脚本会同步根包、所有 workspace、`package-lock.json` 和 Python 版本文件：
 
 ```bash
 npm run version:patch                 # 0.5.0 → 0.5.1，兼容性修复

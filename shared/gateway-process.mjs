@@ -13,7 +13,9 @@ import { gatewayOptionsEnvironment } from './gateway-options.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
-export const DEFAULT_GATEWAY_ENTRY = resolve(here, '../server/src/index.mjs')
+// Existing Node/Electron hosts keep forking a JavaScript entry.  That entry is
+// now only a process bridge: the Gateway itself runs in Python.
+export const DEFAULT_GATEWAY_ENTRY = resolve(here, '../server/src/python-gateway-entry.mjs')
 export const GATEWAY_READY_MESSAGE = 'qwen-audio-agent:gateway-ready'
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]'])

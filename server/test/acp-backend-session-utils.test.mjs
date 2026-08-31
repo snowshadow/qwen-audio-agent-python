@@ -3,7 +3,24 @@ import test from 'node:test'
 import {
   activityFromUpdate,
   applySessionMetadataUpdate,
+  projectSessionKey,
+  sessionOwnerId,
 } from '../src/agent/acp-backend-session-utils.mjs'
+
+test('scopes project Session keys and metadata by owner', () => {
+  assert.equal(
+    projectSessionKey('owner one', 'qoder', 'session:one'),
+    'qoder:owner%20one:project:session%3Aone',
+  )
+  assert.notEqual(
+    projectSessionKey('owner one', 'qoder', 'session:one'),
+    projectSessionKey('owner two', 'qoder', 'session:one'),
+  )
+  assert.equal(sessionOwnerId({
+    sessionId: 'session:one',
+    _meta: { owner_id: 'owner-one' },
+  }), 'owner-one')
+})
 
 test('projects an ACP plan into stable task progress', () => {
   assert.deepEqual(activityFromUpdate({

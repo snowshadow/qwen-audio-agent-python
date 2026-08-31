@@ -38,7 +38,7 @@ import {
 } from './config-command.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
-const gatewayPath = resolve(root, 'server/src/index.mjs')
+const gatewayPath = resolve(root, 'server/src/python-gateway-entry.mjs')
 
 async function runMinimal(options) {
   const moduleUrl = pathToFileURL(resolve(root, 'tui/src/index.mjs'))

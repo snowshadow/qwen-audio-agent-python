@@ -175,6 +175,14 @@ for (const file of trackedFiles) {
 
 NODE
 
+node --input-type=module <<'NODE'
+import { readFileSync } from 'node:fs'
+import { assertPythonVersionsAligned } from './scripts/set-version.mjs'
+
+const expected = JSON.parse(readFileSync('package.json', 'utf8')).version
+assertPythonVersionsAligned('.', expected)
+NODE
+
 node --check scripts/opencode.mjs
 node --check scripts/openclaw.mjs
 node --check scripts/opencode-server.mjs
@@ -188,6 +196,7 @@ git diff --check
 npm run audit:release
 npm run lint
 npm test
+npm run test:python
 npm run build
 node scripts/verify-package.mjs
 

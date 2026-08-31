@@ -195,7 +195,9 @@ test('starts only the Gateway and waits for its managed backend', async () => {
   })
   assert.equal(calls.length, 1)
   assert.equal(calls[0][0], process.execPath)
-  assert.deepEqual(calls[0][1], [resolve(root, 'server/src/index.mjs')])
+  assert.deepEqual(calls[0][1], [
+    resolve(root, 'server/src/python-gateway-entry.mjs'),
+  ])
   assert.equal(calls[0][2].env.OPENCODE_BASE_URL, 'http://127.0.0.1:4096')
   assert.deepEqual(
     calls[0][2].stdio,

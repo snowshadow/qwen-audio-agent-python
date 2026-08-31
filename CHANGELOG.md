@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Gateway 核心改为 Python / LangGraph：`FrontendTurnGraph` 与 `WorkGraph` 负责有界
+  状态机，Node 与 Electron 入口改为启动 Python CLI，ACP 后台仍走 `BackendPort` 桥。
+- 前台 MCP、OpenAPI、知识检索、联网搜索、本地唤醒词和会话结束自动记忆整理尚未接入
+  Python Gateway；当前请使用内置 realtime 工具与 `memory` 工具。
+- 已移除未接入启动路径的 JavaScript Gateway 运行时（`createGatewayApplication`、
+  `TaskManager`、`attachRealtimeGateway`）。v2 不再导出
+  `qwen-audio-agent/gateway-application`。ACP 后台适配器、Backend Adapter SDK 与
+  公开 Provider 合同仍保留。v2 公开基线保持该混合架构：LangGraph 只负责有界
+  状态机，不把 ACP 或桌面宿主迁到 Python。
+
 - 新增 Pi 后台支持：通过社区 `pi-acp` 适配器接入，并支持一键安装。Pi 没有
   内置沙箱与权限审批机制，始终等效于 `full` 权限，请仅在可信环境中使用。
 

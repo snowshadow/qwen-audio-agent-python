@@ -30,8 +30,6 @@ export function gatewayOptionsEnvironment({
       : String(backend)
   }
   if (wakeWord !== undefined) {
-    // The wake word engine is the only consumer of the optional sherpa-onnx
-    // native dependency, so this single switch keeps it untouched for hosts.
     env.QWEN_AUDIO_WAKE_WORD_ENABLED = wakeWord ? 'true' : 'false'
   }
   if (owner !== undefined) env.QWEN_AUDIO_GATEWAY_OWNER = String(owner)

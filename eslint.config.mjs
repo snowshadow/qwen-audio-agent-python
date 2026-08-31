@@ -86,22 +86,6 @@ export default [
     },
   },
   {
-    files: ['server/src/task/**/*.{js,mjs,cjs}'],
-    rules: {
-      'no-restricted-imports': ['error', {
-        patterns: [{
-          group: [
-            '../agent/**',
-            '../../agent/**',
-            '../voice/**',
-            '../../voice/**',
-          ],
-          message: 'the task domain must not depend on voice or backend adapters',
-        }],
-      }],
-    },
-  },
-  {
     files: ['server/src/voice/**/*.{js,mjs,cjs}'],
     rules: {
       'no-restricted-imports': ['error', {

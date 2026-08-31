@@ -121,6 +121,31 @@ test('ACP submit exposes Work values while Session details stay private', async 
   await backend.close()
 })
 
+test('ACP Work status and cancellation are isolated by owner', async () => {
+  const client = fakeClient({ hold: true })
+  const backend = adapter({ client })
+  const pending = backend.submit({
+    id: 'work-owner-one',
+    ownerId: 'owner-one',
+    message: '完成请求',
+  })
+  await new Promise(resolve => setImmediate(resolve))
+
+  assert.equal(backend.status('work-owner-one', {
+    ownerId: 'owner-two',
+  }).state, 'not_found')
+  await assert.rejects(backend.cancel('work-owner-one', {
+    ownerId: 'owner-two',
+  }), /没有找到可取消/)
+  assert.equal(backend.status('work-owner-one', {
+    ownerId: 'owner-one',
+  }).state, 'working')
+
+  client.gate.resolve()
+  await pending
+  await backend.close()
+})
+
 test('ACP submit preserves non-text output as standard artifacts', async () => {
   const backend = adapter({
     client: fakeClient({

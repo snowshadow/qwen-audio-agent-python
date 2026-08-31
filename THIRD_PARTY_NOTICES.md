@@ -22,7 +22,15 @@ qwen-audio-agent 使用并分发若干开源组件。项目自身使用 Apache L
 | Model Context Protocol TypeScript SDK | MIT | https://github.com/modelcontextprotocol/typescript-sdk |
 | Zod | MIT | https://github.com/colinhacks/zod |
 | concurrently | MIT | https://github.com/open-cli-tools/concurrently |
+| FastAPI | MIT | https://github.com/fastapi/fastapi |
+| LangGraph | MIT | https://github.com/langchain-ai/langgraph |
+| langgraph-checkpoint-sqlite | MIT | https://github.com/langchain-ai/langgraph |
+| Pydantic | MIT | https://github.com/pydantic/pydantic |
+| Uvicorn | BSD-3-Clause | https://github.com/Kludex/uvicorn |
+| websockets | BSD-3-Clause | https://github.com/python-websockets/websockets |
+| python-socks | Apache-2.0 | https://github.com/romis2012/python-socks |
 
-完整、可复现的依赖版本记录在 `package-lock.json`。npm 安装保留每个依赖包自带的
-许可证文件；Electron 安装包同时保留 Electron/Chromium 自带的许可证与 notices。
+完整、可复现的 Node 依赖版本记录在 `package-lock.json`，Python 依赖版本记录在
+`uv.lock`。npm 与 uv 安装会保留各依赖包自带的许可证文件；Electron 安装包同时保留
+Electron/Chromium 自带的许可证与 notices。
 发布者在升级或新增依赖时必须检查其许可证兼容性，并同步更新本文件。

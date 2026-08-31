@@ -1317,7 +1317,7 @@ export default function App() {
         >
           {agentTask.authorization.submitting
             ? t('正在提交')
-            : t('本会话始终允许')}
+            : t('允许这一次')}
         </button>
         <button
           className="permission-deny"

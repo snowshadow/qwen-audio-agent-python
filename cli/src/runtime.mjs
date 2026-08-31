@@ -294,7 +294,7 @@ function backendEnvironment(env, backend) {
 function gatewaySpawn(root, platform, env, target, options) {
   return {
     command: process.execPath,
-    args: [resolve(root, 'server/src/index.mjs')],
+    args: [resolve(root, 'server/src/python-gateway-entry.mjs')],
     options: {
       cwd: resolve(root, 'server'),
       env: {
