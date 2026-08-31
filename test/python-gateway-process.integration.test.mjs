@@ -6,6 +6,8 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { createGatewayProcess } from '../shared/gateway-process.mjs'
 
+const LOCK_CLEANUP_TIMEOUT_MS = process.platform === 'win32' ? 10_000 : 2_000
+
 async function waitUntil(predicate, timeoutMs = 2_000) {
   const deadline = Date.now() + timeoutMs
   while (!predicate()) {
@@ -61,7 +63,7 @@ test('the unchanged Node host starts and stops the Python Gateway', async t => {
     await gateway.stop()
   }
   assert.equal(
-    await waitUntil(() => !existsSync(join(configDir, 'gateway.lock'))),
+    await waitUntil(() => !existsSync(join(configDir, 'gateway.lock')), LOCK_CLEANUP_TIMEOUT_MS),
     true,
     childOutput,
   )

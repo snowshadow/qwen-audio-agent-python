@@ -2740,8 +2740,14 @@ test('rejects a native recovery probe that cannot finish within its bound', asyn
     client: fakeAcpClient(),
     recoveryProbeTimeoutMs: 5,
     nativeDelegationAdapter: {
-      canRecover() {
-        return new Promise(() => {})
+      canRecover({ signal } = {}) {
+        return new Promise((resolve, reject) => {
+          if (signal?.aborted) {
+            reject(signal.reason)
+            return
+          }
+          signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+        })
       },
       async wait() {
         throw new Error('must not wait')

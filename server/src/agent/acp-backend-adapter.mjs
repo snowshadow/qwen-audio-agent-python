@@ -1747,14 +1747,25 @@ export class AcpBackendAdapter {
         }, this.recoveryProbeTimeoutMs)
         timer.unref?.()
       })
-      const validation = Promise.resolve().then(() => (
-        this.nativeDelegationAdapter.canRecover({
-          runId,
-          sessionId,
-          ownerId,
-          signal: controller.signal,
-        })
-      ))
+      const validation = Promise.race([
+        Promise.resolve().then(() => (
+          this.nativeDelegationAdapter.canRecover({
+            runId,
+            sessionId,
+            ownerId,
+            signal: controller.signal,
+          })
+        )),
+        new Promise((_, reject) => {
+          if (controller.signal.aborted) {
+            reject(controller.signal.reason)
+            return
+          }
+          controller.signal.addEventListener('abort', () => {
+            reject(controller.signal.reason)
+          }, { once: true })
+        }),
+      ]).catch(() => false)
       return await Promise.race([validation, timeout]) === true
     } catch {
       return false
