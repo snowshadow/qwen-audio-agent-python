@@ -54,7 +54,23 @@ function assertProductionClean() {
   const { report, status } = runAudit(['--omit=dev', '--audit-level=high'])
   if (status !== 0 || report.metadata?.vulnerabilities?.high
     || report.metadata?.vulnerabilities?.critical) {
-    throw new Error('生产依赖存在 high 或 critical 漏洞')
+    const vulnerabilities = report.vulnerabilities || {}
+    const highCritical = []
+    for (const [name, vuln] of Object.entries(vulnerabilities)) {
+      if (vuln.severity === 'high' || vuln.severity === 'critical') {
+        const advisories = []
+        for (const via of vuln.via || []) {
+          if (typeof via === 'object' && via.source) {
+            advisories.push(`${via.url || `advisory ${via.source}`} (${vuln.severity})`)
+          }
+        }
+        highCritical.push(`  ${name}@${vuln.range}: ${advisories.join(', ')}`)
+      }
+    }
+    const details = highCritical.length
+      ? `\n生产依赖存在 high 或 critical 漏洞：\n${highCritical.join('\n')}`
+      : ''
+    throw new Error(`生产依赖存在 high 或 critical 漏洞${details}`)
   }
 }
 
