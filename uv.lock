@@ -641,11 +641,11 @@ wheels = [
 
 [[package]]
 name = "python-socks"
-version = "2.8.2"
+version = "3.1.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/db/ad/5bbfab3d3a266963cca0c09e23a725bbf5f0535d21c8bd1d5272e4430771/python_socks-2.8.2.tar.gz", hash = "sha256:ffc493951854fa3fc0551e0434a09a7b9f9047f9ad666dce42cb94a52e8a34b6", size = 39656, upload-time = "2026-06-23T05:22:01.994Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/04/ad/484ffb79532517b11a90af38647c38652224650b31a7ae1cedd5a418d8ab/python_socks-3.1.1.tar.gz", hash = "sha256:8d3e817cdbe858dc0bb8c8fdc8e79b6ce37acce110d33374c6f57a675cc9029e", size = 232781, upload-time = "2026-09-08T13:03:31.058Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3d/18/23b981b1cf58c1e7b7e36fa1392daf12878b6a3c26c5e4248601647a6d09/python_socks-2.8.2-py3-none-any.whl", hash = "sha256:7cf785d0631e0659384a773b3c402bc22cccdc23894ba1d65f8524748ace1193", size = 55501, upload-time = "2026-06-23T05:22:00.658Z" },
+    { url = "https://files.pythonhosted.org/packages/3b/23/2c2cef1b4313c55d1713201acd4ee2043fb2cf22e546ca9d36bf4317faea/python_socks-3.1.1-py3-none-any.whl", hash = "sha256:327e0d6378702c73a7790bf732e9f01392f17b48c7348a50b5bd1f710c2df1be", size = 49566, upload-time = "2026-09-08T13:03:29.604Z" },
 ]
 
 [[package]]
@@ -722,7 +722,7 @@ requires-dist = [
     { name = "langgraph", specifier = "==1.2.12" },
     { name = "langgraph-checkpoint-sqlite", specifier = ">=3.1.1,<4" },
     { name = "pydantic", specifier = ">=2.12,<3" },
-    { name = "python-socks", extras = ["asyncio"], specifier = ">=2.7,<3" },
+    { name = "python-socks", extras = ["asyncio"], specifier = ">=2.7,<4" },
     { name = "uvicorn", specifier = ">=0.38,<1" },
     { name = "websockets", specifier = ">=16,<17" },
 ]
