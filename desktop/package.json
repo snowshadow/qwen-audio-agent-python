@@ -9,7 +9,7 @@
     "test": "node --test"
   },
   "devDependencies": {
-    "electron": "^43.7.5"
+    "electron": "^43.8.1"
   },
   "dependencies": {
     "ws": "8.22.0"
