@@ -1,13 +1,34 @@
+import { accessSync, constants as fsConstants } from 'node:fs'
+import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const executable = resolve(
-  root,
-  'node_modules/.bin',
-  process.platform === 'win32' ? 'electron.cmd' : 'electron',
-)
+const binName = process.platform === 'win32' ? 'electron.cmd' : 'electron'
+
+function resolveElectronExecutable() {
+  const candidates = [
+    resolve(root, 'desktop/node_modules/.bin', binName),
+    resolve(root, 'node_modules/.bin', binName),
+  ]
+  for (const candidate of candidates) {
+    try {
+      accessSync(candidate, fsConstants.F_OK)
+      return candidate
+    } catch {
+      // try next location
+    }
+  }
+  try {
+    // Electron's Node entry returns the binary path when required outside Electron.
+    return createRequire(resolve(root, 'desktop/package.json'))('electron')
+  } catch {
+    return candidates[0]
+  }
+}
+
+const executable = resolveElectronExecutable()
 const fixture = resolve(root, 'desktop/smoke/electron-smoke.cjs')
 
 const child = spawn(executable, [fixture], {

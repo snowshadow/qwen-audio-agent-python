@@ -216,7 +216,7 @@
   "devDependencies": {
     "concurrently": "^9.2.0",
     "electron-builder": "26.18.0",
-    "eslint": "10.13.0",
+    "eslint": "10.14.0",
     "eslint-plugin-react-hooks": "7.1.1",
     "globals": "17.13.0"
   },
