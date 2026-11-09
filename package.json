@@ -218,7 +218,7 @@
     "electron-builder": "26.18.0",
     "eslint": "10.14.0",
     "eslint-plugin-react-hooks": "7.1.1",
-    "globals": "17.13.0"
+    "globals": "17.14.0"
   },
   "overrides": {
     "@hono/node-server": "2.0.12",
